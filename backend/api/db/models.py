@@ -110,7 +110,7 @@ class Client(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="clients")
-    holdings = relationship("PFICHolding", back_populates="client")
+    holdings = relationship("PFICHolding", back_populates="client", cascade="all, delete-orphan")
 
 
 # ── PFIC holding tables ──────────────────────────────────────────────────────
@@ -130,8 +130,8 @@ class PFICHolding(Base):
 
     client = relationship("Client", back_populates="holdings")
     transactions = relationship("Transaction", back_populates="holding",
-                                order_by="Transaction.txn_date")
-    calculations = relationship("Calculation", back_populates="holding")
+                                order_by="Transaction.txn_date", cascade="all, delete-orphan")
+    calculations = relationship("Calculation", back_populates="holding", cascade="all, delete-orphan")
 
 
 class Transaction(Base):
