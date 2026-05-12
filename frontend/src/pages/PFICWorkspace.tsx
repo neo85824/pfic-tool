@@ -56,6 +56,7 @@ export default function PFICWorkspace() {
   }
 
   const deleteTxn = async (id: string) => {
+    if (!window.confirm('Delete this transaction?')) return
     await txnsApi.delete(holdingId!, id)
     await loadTxns()
   }
@@ -240,7 +241,7 @@ export default function PFICWorkspace() {
                         <th className="pb-2 text-slate-500 font-medium">Date</th>
                         <th className="pb-2 text-slate-500 font-medium">Type</th>
                         <th className="pb-2 text-slate-500 font-medium text-right">Units</th>
-                        <th className="pb-2 text-slate-500 font-medium text-right">Amount USD</th>
+                        <th className="pb-2 text-slate-500 font-medium text-right pr-8">Amount USD</th>
                         <th className="pb-2 text-slate-500 font-medium">Notes</th>
                         <th className="pb-2"></th>
                       </tr>
@@ -258,7 +259,7 @@ export default function PFICWorkspace() {
                             }`}>{t.txn_type}</span>
                           </td>
                           <td className="py-2 text-right font-mono text-xs">{t.units ?? '—'}</td>
-                          <td className="py-2 text-right font-mono">{fmt(t.total_value_usd)}</td>
+                          <td className="py-2 text-right font-mono pr-8">{fmt(t.total_value_usd)}</td>
                           <td className="py-2 text-slate-400 text-xs">{t.notes || '—'}</td>
                           <td className="py-2">
                             <button onClick={() => deleteTxn(t.id)} className="text-slate-300 hover:text-red-500 text-xs">✕</button>
@@ -373,7 +374,7 @@ export default function PFICWorkspace() {
                     <tr className="border-b border-slate-200 text-left">
                       <th className="pb-2 text-slate-500 font-medium">Year</th>
                       <th className="pb-2 text-slate-500 font-medium text-right">Days</th>
-                      <th className="pb-2 text-slate-500 font-medium text-right">Amount</th>
+                      <th className="pb-2 text-slate-500 font-medium text-right pr-8">Amount</th>
                       <th className="pb-2 text-slate-500 font-medium">Classification</th>
                     </tr>
                   </thead>
@@ -384,7 +385,7 @@ export default function PFICWorkspace() {
                         <tr key={yr} className="border-b border-slate-100">
                           <td className="py-1.5 font-medium">{yr}</td>
                           <td className="py-1.5 text-right text-slate-600">{bkt.days}</td>
-                          <td className="py-1.5 text-right font-mono">{fmt(parseFloat(bkt.amount))}</td>
+                          <td className="py-1.5 text-right font-mono pr-8">{fmt(parseFloat(bkt.amount))}</td>
                           <td className="py-1.5">
                             <span className={`text-xs px-2 py-0.5 rounded-full ${
                               bkt.classification === 'prior_pfic' ? 'bg-orange-100 text-orange-700' :
