@@ -325,91 +325,230 @@ export default function PFICWorkspace() {
         )}
 
         {/* Step 4 — Results */}
-        {step === 4 && calcResult && (
-          <div className="space-y-6">
-            {/* Warnings */}
-            {calcResult.warnings?.length > 0 && (
-              <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
-                <p className="font-semibold text-amber-800 mb-2">⚠ Warnings</p>
-                {calcResult.warnings.map((w, i) => (
-                  <p key={i} className="text-sm text-amber-700">• {w}</p>
-                ))}
-              </div>
-            )}
+        {step === 4 && calcResult && (() => {
+          const fr = calcResult.full_result as any
+          const yearBuckets: Record<string, any> = fr.year_buckets || {}
 
-            {/* §6501 reminder */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-              <strong>§6501(c)(8):</strong> Download the Line 16a attachment in Step 5 and attach it to the filed return.
-              Without this attachment, the IRS statute of limitations does not begin to run.
-            </div>
+          // Merge year_results across all lots
+          const merged: Record<string, any> = {}
+          for (const dr of (fr.deferred_tax_results || [])) {
+            for (const [yr, data] of Object.entries<any>(dr.year_results || {})) {
+              if (!merged[yr]) {
+                merged[yr] = { ...data, tax: parseFloat(data.tax || '0'), interest: parseFloat(data.interest || '0') }
+              } else {
+                merged[yr].tax += parseFloat(data.tax || '0')
+                merged[yr].interest += parseFloat(data.interest || '0')
+              }
+            }
+          }
 
-            {/* Summary cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: 'Excess Distribution', value: calcResult.total_excess_dist },
-                { label: 'Additional Tax', value: calcResult.additional_tax },
-                { label: '§6621 Interest', value: calcResult.total_interest },
-                { label: 'Grand Total', value: calcResult.grand_total, highlight: true },
-              ].map((card) => (
-                <div key={card.label} className={`rounded-xl border p-4 ${card.highlight ? 'border-blue-400 bg-blue-50' : 'border-slate-200 bg-white'}`}>
-                  <p className="text-xs text-slate-500 mb-1">{card.label}</p>
-                  <p className={`text-lg font-bold ${card.highlight ? 'text-blue-700' : 'text-slate-800'}`}>{fmt(card.value)}</p>
+          const sortedYears = Object.keys(yearBuckets).sort((a, b) => parseInt(a) - parseInt(b))
+          const totalDays = sortedYears.reduce((s, yr) => s + yearBuckets[yr].days, 0)
+          const excess = parseFloat(fr.excess_distribution || '0')
+          const dailyRate = totalDays > 0 ? excess / totalDays : 0
+          const firstYear = sortedYears[0] || ''
+          const priorYears = sortedYears.filter(yr => merged[yr]?.classification === 'prior_pfic')
+          const interestEnd = priorYears.length > 0 ? merged[priorYears[0]]?.interest_end?.slice(0, 10) : null
+
+          return (
+            <div className="space-y-5">
+              {/* Warnings */}
+              {calcResult.warnings?.length > 0 && (
+                <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
+                  <p className="font-semibold text-amber-800 mb-2">⚠ Warnings</p>
+                  {calcResult.warnings.map((w, i) => <p key={i} className="text-sm text-amber-700">• {w}</p>)}
                 </div>
-              ))}
-            </div>
+              )}
 
-            {/* Ordinary income */}
-            <div className="bg-white rounded-xl border border-slate-200 p-5">
-              <p className="text-sm font-medium text-slate-700">Ordinary Income (Line 16b)</p>
-              <p className="text-2xl font-bold text-slate-800">{fmt(calcResult.ordinary_income)}</p>
-              <p className="text-xs text-slate-400 mt-1">Pre-PFIC + current year amounts — taxed as ordinary income at your rate</p>
-            </div>
+              {/* §6501 banner */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+                <strong>§6501(c)(8):</strong> Download the Line 16a attachment in Step 5 and attach it to the filed return.
+                Without this attachment, the IRS statute of limitations does not begin to run.
+              </div>
 
-            {/* Year detail */}
-            {(calcResult.full_result as any)?.year_buckets && (
+              {/* 125% Test */}
               <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-semibold text-slate-800 mb-3">Year-by-Year Allocation</h3>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left">
-                      <th className="pb-2 text-slate-500 font-medium">Year</th>
-                      <th className="pb-2 text-slate-500 font-medium text-right">Days</th>
-                      <th className="pb-2 text-slate-500 font-medium text-right pr-8">Amount</th>
-                      <th className="pb-2 text-slate-500 font-medium">Classification</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries((calcResult.full_result as any).year_buckets as Record<string, any>)
-                      .sort(([a], [b]) => parseInt(a) - parseInt(b))
-                      .map(([yr, bkt]) => (
-                        <tr key={yr} className="border-b border-slate-100">
-                          <td className="py-1.5 font-medium">{yr}</td>
-                          <td className="py-1.5 text-right text-slate-600">{bkt.days}</td>
-                          <td className="py-1.5 text-right font-mono pr-8">{fmt(parseFloat(bkt.amount))}</td>
-                          <td className="py-1.5">
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${
-                              bkt.classification === 'prior_pfic' ? 'bg-orange-100 text-orange-700' :
-                              bkt.classification === 'pre_pfic' ? 'bg-purple-100 text-purple-700' :
-                              'bg-green-100 text-green-700'
-                            }`}>{bkt.classification.replace('_', ' ')}</span>
-                          </td>
+                <h3 className="font-semibold text-slate-800 mb-3">
+                  125% Test
+                  <span className="ml-2 text-xs font-normal text-slate-400">[IRC §1291(b)(2)(A)]</span>
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Current Distribution', value: parseFloat(fr.current_year_distribution || '0') },
+                    { label: 'Prior 3-Year Average', value: parseFloat(fr.prior_3yr_average || '0') },
+                    { label: 'Benchmark (×125%)', value: parseFloat(fr.prior_3yr_average || '0') * 1.25 },
+                    { label: 'Excess Distribution', value: excess, highlight: true },
+                  ].map(c => (
+                    <div key={c.label} className={`rounded-lg border p-3 ${c.highlight ? 'border-orange-400 bg-orange-50' : 'border-slate-200 bg-slate-50'}`}>
+                      <p className="text-xs text-slate-500 mb-1">{c.label}</p>
+                      <p className={`font-bold text-sm ${c.highlight ? 'text-orange-700' : 'text-slate-800'}`}>{fmt(c.value)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step 1: Holding period */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-semibold text-slate-800 mb-3">
+                  Step 1 — Holding Period & Daily Rate
+                  <span className="ml-2 text-xs font-normal text-slate-400">[§1291(a)(1)(A)]</span>
+                </h3>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Period</p>
+                    <p className="font-mono">{firstYear} → {fr.tax_year}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Total Days</p>
+                    <p className="font-bold">{totalDays.toLocaleString()} days</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Daily Rate</p>
+                    <p className="font-mono">${dailyRate.toFixed(5)}/day</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 2: Year-by-year allocation & tax */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-semibold text-slate-800 mb-3">
+                  Step 2 — Year-by-Year Allocation & Tax
+                  <span className="ml-2 text-xs font-normal text-slate-400">[§1291(c)(2)]</span>
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b-2 border-slate-200 text-left bg-slate-50">
+                        <th className="px-3 py-2 text-slate-500 font-medium">Year</th>
+                        <th className="px-3 py-2 text-slate-500 font-medium text-right">Days</th>
+                        <th className="px-3 py-2 text-slate-500 font-medium text-right">Allocated</th>
+                        <th className="px-3 py-2 text-slate-500 font-medium text-right">Rate</th>
+                        <th className="px-3 py-2 text-slate-500 font-medium text-right">Deferred Tax</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedYears.map(yr => {
+                        const bkt = yearBuckets[yr]
+                        const res = merged[yr]
+                        const isCurrent = bkt.classification === 'current_year'
+                        const tax = res?.tax ?? null
+                        const rate = !isCurrent && tax != null && parseFloat(bkt.amount) > 0
+                          ? (tax / parseFloat(bkt.amount) * 100).toFixed(1) + '%'
+                          : '—'
+                        return (
+                          <tr key={yr} className={`border-b border-slate-100 ${isCurrent ? 'bg-slate-50' : 'hover:bg-slate-50'}`}>
+                            <td className="px-3 py-2 font-medium">{yr}</td>
+                            <td className="px-3 py-2 text-right text-slate-600">{bkt.days}</td>
+                            <td className="px-3 py-2 text-right font-mono">{fmt(parseFloat(bkt.amount))}</td>
+                            <td className="px-3 py-2 text-right font-medium">{rate}</td>
+                            <td className="px-3 py-2 text-right font-mono">
+                              {isCurrent
+                                ? <span className="text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">ordinary income</span>
+                                : fmt(tax)
+                              }
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-slate-300 bg-slate-100 font-bold">
+                        <td className="px-3 py-2">Total</td>
+                        <td className="px-3 py-2 text-right">{totalDays.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right font-mono">{fmt(excess)}</td>
+                        <td></td>
+                        <td className="px-3 py-2 text-right font-mono">{fmt(calcResult.additional_tax)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              {/* Step 3: Interest */}
+              {priorYears.length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                  <h3 className="font-semibold text-slate-800 mb-1">
+                    Step 3 — §6621 Interest
+                    <span className="ml-2 text-xs font-normal text-slate-400">[§6622 daily compound]</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Accrues from each year's filing deadline → {interestEnd} ({fr.tax_year} return due date)
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-slate-200 text-left bg-slate-50">
+                          <th className="px-3 py-2 text-slate-500 font-medium">Year</th>
+                          <th className="px-3 py-2 text-slate-500 font-medium text-right">Tax</th>
+                          <th className="px-3 py-2 text-slate-500 font-medium">Filing Deadline</th>
+                          <th className="px-3 py-2 text-slate-500 font-medium text-right">Interest</th>
                         </tr>
-                      ))}
+                      </thead>
+                      <tbody>
+                        {priorYears.map(yr => {
+                          const res = merged[yr]
+                          const month = res?.interest_start?.slice(5, 7)
+                          const isCovid = month && month !== '04'
+                          return (
+                            <tr key={yr} className="border-b border-slate-100 hover:bg-slate-50">
+                              <td className="px-3 py-2 font-medium">{yr}</td>
+                              <td className="px-3 py-2 text-right font-mono">{fmt(res?.tax)}</td>
+                              <td className="px-3 py-2 font-mono text-xs">
+                                {res?.interest_start?.slice(0, 10)}
+                                {isCovid && <span className="ml-2 text-xs text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded font-semibold">⚠ COVID</span>}
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono">{fmt(res?.interest)}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-slate-300 bg-slate-100 font-bold">
+                          <td className="px-3 py-2" colSpan={3}>Total Interest</td>
+                          <td className="px-3 py-2 text-right font-mono">{fmt(calcResult.total_interest)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Form 8621 Part V Summary */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-semibold text-slate-800 mb-3">Form 8621 Part V — Summary</h3>
+                <table className="w-full text-sm">
+                  <tbody>
+                    {[
+                      { line: '15e(1)', desc: 'Ordinary income (Line 16b)', value: calcResult.ordinary_income },
+                      { line: '15e(2)', desc: 'Excess distribution', value: calcResult.total_excess_dist },
+                      { line: '16c',    desc: 'Additional tax', value: calcResult.additional_tax },
+                      { line: '16f',    desc: '§6621 interest', value: calcResult.total_interest },
+                    ].map(row => (
+                      <tr key={row.line} className="border-b border-slate-100">
+                        <td className="py-2 w-16 font-mono text-xs text-slate-400">{row.line}</td>
+                        <td className="py-2 text-slate-700">{row.desc}</td>
+                        <td className="py-2 text-right font-mono">{fmt(row.value)}</td>
+                      </tr>
+                    ))}
+                    <tr className="bg-blue-50 border-t-2 border-blue-300">
+                      <td className="py-3 font-mono text-xs font-bold text-blue-600">16c+f</td>
+                      <td className="py-3 font-bold text-blue-800">Grand total additional liability</td>
+                      <td className="py-3 text-right font-mono font-bold text-blue-800 text-base">{fmt(calcResult.grand_total)}</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
-            )}
 
-            {/* Engine version */}
-            <p className="text-xs text-slate-400">
-              Engine version: {calcResult.engine_version || 'dev'} · Status: {calcResult.status}
-            </p>
-
-            <button onClick={() => setStep(5)} className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700">
-              Step 5: Export →
-            </button>
-          </div>
-        )}
+              {/* Footer */}
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-slate-400">Engine: {calcResult.engine_version || 'dev'} · {calcResult.status}</p>
+                <button onClick={() => setStep(5)} className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700">
+                  Step 5: Export →
+                </button>
+              </div>
+            </div>
+          )
+        })()}
 
         {step === 4 && !calcResult && (
           <div className="bg-white rounded-xl border border-slate-200 p-10 text-center">
