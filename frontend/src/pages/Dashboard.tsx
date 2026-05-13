@@ -73,8 +73,8 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4">
-        <h1 className="text-xl font-bold text-slate-800">PFIC Tool</h1>
-        <p className="text-xs text-slate-500">§1291 Excess Distribution Calculator</p>
+        <h1 className="text-xl font-bold text-slate-800">PFIC §1291 Calculator</h1>
+        <p className="text-xs text-slate-500">Excess Distribution — IRC §1291 / Form 8621 Part V</p>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">

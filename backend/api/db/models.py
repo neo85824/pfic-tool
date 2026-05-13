@@ -20,10 +20,9 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.types import TypeDecorator, TEXT
 import json
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "sqlite:///./pfic_tool_dev.db",
-)
+_db_url = os.getenv("DATABASE_URL", "sqlite:///./pfic_tool_dev.db")
+# Render provides postgres:// but SQLAlchemy 2.x requires postgresql://
+DATABASE_URL = _db_url.replace("postgres://", "postgresql://", 1)
 
 # ── JSONB compatibility shim (SQLite stores JSON as TEXT) ────────────────────
 

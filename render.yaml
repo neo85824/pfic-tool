@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: pfic-tool-api
+    runtime: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    rootDir: backend
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pfic-tool-db
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: "3.11"
+
+databases:
+  - name: pfic-tool-db
+    plan: free
