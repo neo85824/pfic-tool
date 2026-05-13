@@ -102,6 +102,17 @@ export const txnsApi = {
   },
 }
 
+// ── Holding context (name + client) ──────────────────────────────────────────
+
+export interface HoldingContext {
+  pfic_name: string
+  client_code: string
+}
+
+export const holdingContextApi = {
+  get: (holdingId: string) => api.get<HoldingContext>(`/holdings/${holdingId}/info`),
+}
+
 // ── Calculations ─────────────────────────────────────────────────────────────
 
 export const calcApi = {

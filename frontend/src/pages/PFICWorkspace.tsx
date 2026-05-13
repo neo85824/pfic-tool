@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { holdingsApi, txnsApi, calcApi, exportUrl, type Holding, type Transaction, type CalculationDetail } from '../api'
+import { holdingsApi, txnsApi, calcApi, holdingContextApi, exportUrl, type Holding, type Transaction, type CalculationDetail, type HoldingContext } from '../api'
 
 type Step = 1 | 2 | 3 | 4 | 5
 
@@ -17,22 +17,31 @@ export default function PFICWorkspace() {
 
   const [step, setStep] = useState<Step>(1)
   const [_holding, _setHolding] = useState<Holding | null>(null)
+  const [context, setContext] = useState<HoldingContext | null>(null)
   const [txns, setTxns] = useState<Transaction[]>([])
-  const [taxYear, setTaxYear] = useState(new Date().getFullYear() - 1)
+  const [taxYear, setTaxYear] = useState<number>(() => {
+    const stored = holdingId ? localStorage.getItem(`pfic_taxYear_${holdingId}`) : null
+    return stored ? parseInt(stored) : new Date().getFullYear() - 1
+  })
   const [calcResult, setCalcResult] = useState<CalculationDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [csvStatus, setCsvStatus] = useState('')
+  const [showMethodology, setShowMethodology] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const updateTaxYear = (year: number) => {
+    setTaxYear(year)
+    if (holdingId) localStorage.setItem(`pfic_taxYear_${holdingId}`, String(year))
+  }
 
   // Manual txn form
   const [txnForm, setTxnForm] = useState({ txn_date: '', txn_type: 'purchase', units: '', total_value_usd: '', notes: '' })
 
   useEffect(() => {
-    holdingId && holdingsApi.list('').then().catch()
-    // Fetch the holding itself — we get it from the client's holdings list
-    // For simplicity, fetch transactions which confirms the holding exists
-    txnsApi.list(holdingId!).then((r) => setTxns(r.data)).catch(() => {})
+    if (!holdingId) return
+    holdingContextApi.get(holdingId).then((r) => setContext(r.data)).catch(() => {})
+    txnsApi.list(holdingId).then((r) => setTxns(r.data)).catch(() => {})
   }, [holdingId])
 
   const loadTxns = () => txnsApi.list(holdingId!).then((r) => setTxns(r.data))
@@ -109,11 +118,295 @@ export default function PFICWorkspace() {
       {/* Header */}
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
         <button onClick={() => nav(-1)} className="text-slate-400 hover:text-slate-700 text-sm">←</button>
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">PFIC Workspace</h1>
+        <div className="flex-1">
+          {context ? (
+            <>
+              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">{context.client_code}</p>
+              <h1 className="text-xl font-bold text-slate-800">{context.pfic_name}</h1>
+            </>
+          ) : (
+            <h1 className="text-xl font-bold text-slate-800">PFIC Workspace</h1>
+          )}
           <p className="text-xs text-slate-500">§1291 Excess Distribution · USD</p>
         </div>
+        <button
+          onClick={() => setShowMethodology(true)}
+          className="ml-auto text-sm text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg font-medium"
+        >
+          How we calculate ↗
+        </button>
       </header>
+
+      {/* Methodology modal */}
+      {showMethodology && (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowMethodology(false)} />
+          <div className="relative ml-auto w-full max-w-2xl bg-white h-full overflow-y-auto shadow-2xl">
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">§1291 Excess Distribution — Calculation Methodology</h2>
+                <p className="text-xs text-slate-400 mt-0.5">IRC §§1291–1298 · Form 8621 Part V</p>
+              </div>
+              <button onClick={() => setShowMethodology(false)} className="text-slate-400 hover:text-slate-700 text-xl leading-none">✕</button>
+            </div>
+            <div className="px-6 py-6 space-y-8 text-sm text-slate-700 leading-relaxed">
+
+              {/* Overview */}
+              <section>
+                <h3 className="font-semibold text-slate-900 mb-2 text-base">Background &amp; Purpose</h3>
+                <p className="mb-3">
+                  A Passive Foreign Investment Company (PFIC) is any foreign corporation that meets either an income test (75% or more passive income) or an asset test (50% or more passive assets). U.S. persons who hold PFIC shares and receive distributions — or sell their shares at a gain — are subject to a punitive tax regime under IRC §1291.
+                </p>
+                <p className="mb-3">
+                  The purpose of §1291 is to eliminate the tax deferral benefit that an investor would otherwise obtain by holding a foreign fund that accumulates income without distributing it. The law accomplishes this by treating large distributions as if they had been received ratably over the entire holding period, then taxing each portion at the highest applicable rate <em>for that year</em>, plus an interest charge to recover the time-value of the deferred tax.
+                </p>
+                <div className="bg-blue-50 border-l-4 border-blue-400 rounded-r-lg px-4 py-3 text-blue-800 text-xs">
+                  <strong>Key point:</strong> The §1291 regime is the default method. It applies automatically unless the taxpayer has made a QEF election (§1295) or mark-to-market election (§1296) and maintained it consistently since the first year of PFIC ownership.
+                </div>
+              </section>
+
+              {/* Step 1 */}
+              <section>
+                <div className="flex items-baseline gap-3 mb-2">
+                  <span className="bg-slate-800 text-white text-xs font-bold px-2 py-0.5 rounded">STEP 1</span>
+                  <h3 className="font-semibold text-slate-900 text-base">Determining Whether a Distribution Is "Excess"</h3>
+                </div>
+                <p className="mb-3">
+                  Not every distribution triggers the §1291 regime. The law first applies the <strong>125% test</strong>: a distribution is an <em>excess distribution</em> only to the extent it exceeds 125% of the average annual distribution received during the three years immediately preceding the distribution year (or, if shorter, the portion of the holding period prior to the distribution year).
+                </p>
+                <div className="bg-slate-50 rounded-lg p-4 mb-3 space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Prior-Year Average</p>
+                    <p>Add up distributions received in the one, two, or three tax years before the current year (up to three years), then divide by the number of years the PFIC was held before the current year. If no prior distributions were received, the average is zero — meaning the entire current-year distribution is treated as excess.</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Threshold</p>
+                    <p>Multiply the prior-year average by 1.25. Any current-year distribution above this threshold is the <strong>excess distribution</strong> subject to §1291. The portion at or below the threshold is taxed as ordinary income in the current year.</p>
+                  </div>
+                </div>
+                <div className="bg-amber-50 border-l-4 border-amber-400 rounded-r-lg px-4 py-3 text-amber-800 text-xs">
+                  <strong>Practical note:</strong> Missing even one year of prior distribution data will produce an incorrect prior-year average and therefore an incorrect excess amount. Ensure all prior distributions are entered before running the calculation.
+                </div>
+              </section>
+
+              {/* Step 2 */}
+              <section>
+                <div className="flex items-baseline gap-3 mb-2">
+                  <span className="bg-slate-800 text-white text-xs font-bold px-2 py-0.5 rounded">STEP 2</span>
+                  <h3 className="font-semibold text-slate-900 text-base">Allocating the Excess Across Purchase Lots</h3>
+                </div>
+                <p className="mb-3">
+                  When the taxpayer acquired shares at different times (multiple purchase lots), the total excess distribution is allocated to each lot in proportion to the number of units each lot represents out of the total units held at the time of the distribution. Each lot is then treated independently for the remainder of the calculation, because each lot has its own acquisition date and therefore its own holding period.
+                </p>
+                <p>
+                  Lots purchased in the same calendar year as the distribution are treated entirely as current-year ordinary income — their holding period does not extend into any prior PFIC year, so no deferred tax or interest arises from those lots.
+                </p>
+              </section>
+
+              {/* Step 3 */}
+              <section>
+                <div className="flex items-baseline gap-3 mb-2">
+                  <span className="bg-slate-800 text-white text-xs font-bold px-2 py-0.5 rounded">STEP 3</span>
+                  <h3 className="font-semibold text-slate-900 text-base">Spreading the Excess Ratably Over the Holding Period</h3>
+                </div>
+                <p className="mb-3">
+                  For each lot, the allocated excess is spread over the holding period on a <strong>daily ratable basis</strong>. The holding period runs from the acquisition date up to (but not including) the date of distribution. The excess is divided by the total number of holding days to arrive at a daily amount, and each calendar year receives an amount equal to that daily rate multiplied by the number of days the lot was held during that year.
+                </p>
+                <p className="mb-3">
+                  The result is a set of year-by-year amounts that together equal the full excess allocated to the lot. Each year's amount is then classified as one of three types:
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-slate-600">Classification</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-600">When it applies</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-600">Tax treatment</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      <tr>
+                        <td className="px-3 py-2 font-medium text-green-700">Current Year</td>
+                        <td className="px-3 py-2">Days in the tax year the distribution was received</td>
+                        <td className="px-3 py-2">Ordinary income — included in gross income at current-year rates</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-2 font-medium text-orange-700">Prior PFIC Year</td>
+                        <td className="px-3 py-2">Days in prior years when the fund was already a PFIC (1987 or later)</td>
+                        <td className="px-3 py-2">Subject to deferred tax at the historical maximum rate + §6621 interest</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-2 font-medium text-slate-500">Pre-PFIC Year</td>
+                        <td className="px-3 py-2">Days before 1987 (before the PFIC rules took effect)</td>
+                        <td className="px-3 py-2">Ordinary income — taxed as current-year income with no interest charge</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* Step 4 */}
+              <section>
+                <div className="flex items-baseline gap-3 mb-2">
+                  <span className="bg-slate-800 text-white text-xs font-bold px-2 py-0.5 rounded">STEP 4</span>
+                  <h3 className="font-semibold text-slate-900 text-base">Applying the Historical Maximum Tax Rate</h3>
+                </div>
+                <p className="mb-3">
+                  For each prior PFIC year, the allocated amount is taxed at the <strong>highest applicable individual income tax rate in effect for that year</strong>, regardless of the taxpayer's actual marginal rate. This rule ensures that no benefit is gained from the deferral regardless of the taxpayer's individual circumstances.
+                </p>
+                <div className="overflow-x-auto mb-3">
+                  <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-slate-600">Tax Years</th>
+                        <th className="px-3 py-2 text-right font-medium text-slate-600">Maximum Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {[
+                        ['1987 – 1992', '28%'],
+                        ['1993 – 2000', '39.6%'],
+                        ['2001 – 2002', '39.1%'],
+                        ['2003 – 2012', '35%'],
+                        ['2013 – 2017', '39.6%'],
+                        ['2018 – present', '37%'],
+                      ].map(([yrs, rate]) => (
+                        <tr key={yrs}>
+                          <td className="px-3 py-2 text-slate-700">{yrs}</td>
+                          <td className="px-3 py-2 text-right font-medium text-slate-800">{rate}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-slate-500">
+                  The deferred tax for each prior year is computed independently. The sum of all prior-year deferred taxes is the "additional tax" reported on Form 8621, Line 16c.
+                </p>
+              </section>
+
+              {/* Step 5 */}
+              <section>
+                <div className="flex items-baseline gap-3 mb-2">
+                  <span className="bg-slate-800 text-white text-xs font-bold px-2 py-0.5 rounded">STEP 5</span>
+                  <h3 className="font-semibold text-slate-900 text-base">Computing the Interest Charge</h3>
+                </div>
+                <p className="mb-3">
+                  In addition to the deferred tax, the taxpayer owes interest on each prior-year tax amount. This interest is calculated under §6621, using the IRS underpayment rate, which changes quarterly. It runs from the <strong>original filing deadline of the allocation year</strong> (i.e., the year to which the income was allocated) to the <strong>filing deadline of the current return year</strong>. Interest compounds daily under §6622.
+                </p>
+                <p className="mb-3">
+                  The start date is the filing deadline of the year to which the income is attributed — typically April 15 of the following year — not the date of the actual distribution. This is a commonly misunderstood point: the interest clock starts from when the tax <em>would have been due</em> had the income been recognized in that year.
+                </p>
+                <div className="bg-slate-50 rounded-lg p-4 mb-3">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Special Filing Deadlines</p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="pb-1.5 text-left font-medium text-slate-600">Allocation Year</th>
+                          <th className="pb-1.5 text-left font-medium text-slate-600">Normal Deadline</th>
+                          <th className="pb-1.5 text-left font-medium text-slate-600">Actual Deadline</th>
+                          <th className="pb-1.5 text-left font-medium text-slate-600">Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        <tr>
+                          <td className="py-1.5 text-slate-700">2019</td>
+                          <td className="py-1.5 text-slate-500">2020-04-15</td>
+                          <td className="py-1.5 font-medium">2020-07-15</td>
+                          <td className="py-1.5 text-slate-500">COVID-19 extension (Notice 2020-23)</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1.5 text-slate-700">2020</td>
+                          <td className="py-1.5 text-slate-500">2021-04-15</td>
+                          <td className="py-1.5 font-medium">2021-05-17</td>
+                          <td className="py-1.5 text-slate-500">COVID-19 extension (Notice 2021-21)</td>
+                        </tr>
+                        <tr>
+                          <td className="py-1.5 text-slate-700">2021</td>
+                          <td className="py-1.5 text-slate-500">2022-04-15</td>
+                          <td className="py-1.5 font-medium">2022-04-18</td>
+                          <td className="py-1.5 text-slate-500">April 15 fell on Saturday; §7503 shifts to Monday</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500">
+                  The §6621 underpayment rate is set at the federal short-term rate plus 3 percentage points, adjusted each quarter. The system uses the official IRS Internal Revenue Bulletin rates for each quarter. The total interest for each prior year is reported on Form 8621, Line 16f.
+                </p>
+              </section>
+
+              {/* Step 6 */}
+              <section>
+                <div className="flex items-baseline gap-3 mb-2">
+                  <span className="bg-slate-800 text-white text-xs font-bold px-2 py-0.5 rounded">STEP 6</span>
+                  <h3 className="font-semibold text-slate-900 text-base">Lot Matching for Sales — FIFO Required</h3>
+                </div>
+                <p className="mb-3">
+                  When a taxpayer disposes of PFIC shares, the IRS requires lots to be matched on a <strong>first-in, first-out (FIFO)</strong> basis. The oldest shares are deemed sold first. If only part of a lot is sold, the remaining units retain their original acquisition date — they are not treated as newly acquired. This matters significantly because the acquisition date determines how many calendar years fall within the holding period and therefore how much deferred tax and interest accumulates.
+                </p>
+                <p>
+                  After a partial or full sale, subsequent distributions are calculated using only the units that remain. Sold units no longer participate in the ratable allocation.
+                </p>
+              </section>
+
+              {/* Form 8621 */}
+              <section>
+                <h3 className="font-semibold text-slate-900 mb-3 text-base">Where These Amounts Appear on Form 8621</h3>
+                <p className="mb-3">Form 8621, Part V is used to report excess distributions under §1291. The following lines correspond to the amounts computed in this tool:</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-slate-600 w-20">Line</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-600">What It Represents</th>
+                        <th className="px-3 py-2 text-left font-medium text-slate-600">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      <tr>
+                        <td className="px-3 py-2 font-medium text-slate-700">15e(1)</td>
+                        <td className="px-3 py-2">Ordinary income</td>
+                        <td className="px-3 py-2 text-slate-500">The non-excess portion of the distribution plus any current-year and pre-PFIC allocated amounts. Included in gross income at the taxpayer's current rate.</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-2 font-medium text-slate-700">15e(2)</td>
+                        <td className="px-3 py-2">Total excess distribution</td>
+                        <td className="px-3 py-2 text-slate-500">The full amount that passed the 125% threshold test, across all lots.</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-2 font-medium text-slate-700">16c</td>
+                        <td className="px-3 py-2">Additional tax</td>
+                        <td className="px-3 py-2 text-slate-500">Sum of deferred taxes computed for each prior PFIC year at the historical maximum rate. This is added directly to the tax liability — it does not offset deductions or credits.</td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-2 font-medium text-slate-700">16f</td>
+                        <td className="px-3 py-2">§6621 interest</td>
+                        <td className="px-3 py-2 text-slate-500">Daily-compounded underpayment interest on the deferred tax for each prior year. Also added directly to the tax liability.</td>
+                      </tr>
+                      <tr className="bg-slate-50 font-medium">
+                        <td className="px-3 py-2 text-slate-800">16c + 16f</td>
+                        <td className="px-3 py-2 text-slate-800">Total additional liability</td>
+                        <td className="px-3 py-2 text-slate-500">The combined deferred tax and interest amount due with the current-year return. Shown as the grand total in the Results summary.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-3 bg-amber-50 border-l-4 border-amber-400 rounded-r-lg px-4 py-3 text-amber-800 text-xs">
+                  <strong>§6501(c)(8) — Statute of Limitations:</strong> The IRS statute of limitations on assessment does not begin to run for the PFIC-related items unless the taxpayer attaches a complete and accurate disclosure statement (the Line 16a attachment) to the timely filed return. Failure to attach this statement leaves the PFIC items open to IRS examination indefinitely.
+                </div>
+              </section>
+
+              <section className="border-t border-slate-200 pt-5">
+                <p className="text-xs text-slate-400">
+                  Legal authority: IRC §§1291–1298 · Treas. Reg. §1.1291-1 · Form 8621 and Instructions (Rev. Jan. 2022) · Notice 2020-23 · Notice 2021-21 · Rev. Proc. 2022-38 (§6621 rates)
+                </p>
+              </section>
+
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Step nav */}
       <div className="bg-white border-b border-slate-200 px-6">
@@ -155,7 +448,7 @@ export default function PFICWorkspace() {
                 <input
                   type="number"
                   value={taxYear}
-                  onChange={(e) => setTaxYear(parseInt(e.target.value))}
+                  onChange={(e) => updateTaxYear(parseInt(e.target.value))}
                   className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-32"
                 />
               </div>
@@ -386,6 +679,53 @@ export default function PFICWorkspace() {
                   ))}
                 </div>
               </div>
+
+              {/* Excess Distribution by Lot */}
+              {(fr.deferred_tax_results || []).length > 0 && (
+                <div className="bg-white rounded-xl border border-slate-200 p-5">
+                  <h3 className="font-semibold text-slate-800 mb-3">
+                    Excess Distribution by Lot
+                    <span className="ml-2 text-xs font-normal text-slate-400">[§1291(a)(1) proportional allocation]</span>
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-slate-200 text-left bg-slate-50">
+                          <th className="px-3 py-2 text-slate-500 font-medium">Lot</th>
+                          <th className="px-3 py-2 text-slate-500 font-medium">Acquired</th>
+                          <th className="px-3 py-2 text-slate-500 font-medium text-right">Units</th>
+                          <th className="px-3 py-2 text-slate-500 font-medium text-right">Excess Share</th>
+                          <th className="px-3 py-2 text-slate-500 font-medium text-right">Deferred Tax</th>
+                          <th className="px-3 py-2 text-slate-500 font-medium text-right">Interest</th>
+                          <th className="px-3 py-2 text-slate-500 font-medium text-right">Grand Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(fr.deferred_tax_results as any[]).map((dr, i) => (
+                          <tr key={i} className="border-b border-slate-100 hover:bg-slate-50">
+                            <td className="px-3 py-2 font-medium text-slate-600">L{i + 1}</td>
+                            <td className="px-3 py-2 font-mono text-xs">{dr.acquisition_date}</td>
+                            <td className="px-3 py-2 text-right font-mono">{parseFloat(dr.units).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className="px-3 py-2 text-right font-mono">{fmt(parseFloat(dr.lot_excess))}</td>
+                            <td className="px-3 py-2 text-right font-mono">{fmt(parseFloat(dr.total_deferred_tax))}</td>
+                            <td className="px-3 py-2 text-right font-mono">{fmt(parseFloat(dr.total_interest))}</td>
+                            <td className="px-3 py-2 text-right font-mono font-semibold">{fmt(parseFloat(dr.grand_total))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-slate-300 bg-slate-100 font-bold">
+                          <td className="px-3 py-2" colSpan={3}>Total</td>
+                          <td className="px-3 py-2 text-right font-mono">{fmt(excess)}</td>
+                          <td className="px-3 py-2 text-right font-mono">{fmt(calcResult.additional_tax)}</td>
+                          <td className="px-3 py-2 text-right font-mono">{fmt(calcResult.total_interest)}</td>
+                          <td className="px-3 py-2 text-right font-mono">{fmt(calcResult.grand_total)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* Step 1: Holding period */}
               <div className="bg-white rounded-xl border border-slate-200 p-5">

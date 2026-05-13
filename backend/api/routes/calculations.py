@@ -27,6 +27,21 @@ from pfic_engine.verification.cross_check import run_all_checks
 router = APIRouter(prefix="/holdings/{holding_id}", tags=["calculations"])
 
 
+class HoldingContext(BaseModel):
+    pfic_name: str
+    client_code: str
+
+
+@router.get("/info", response_model=HoldingContext)
+def get_holding_info(
+    holding_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    h = _get_holding(holding_id, user, db)
+    return HoldingContext(pfic_name=h.pfic_name, client_code=h.client.client_code)
+
+
 def _get_holding(holding_id: str, user: User, db: Session) -> PFICHolding:
     h = (
         db.query(PFICHolding)
@@ -156,14 +171,23 @@ def run_calculation(
             )
             try:
                 check_warnings = run_all_checks(
-                    alloc["year_buckets"], excess, deferred
+                    alloc["year_buckets"], lot_excess, deferred
                 )
                 warnings.extend(check_warnings)
             except Exception as e:
                 warnings.append(f"Cross-check failed: {e}")
 
             all_year_buckets.update(alloc["year_buckets"])
-            all_deferred_results.append(deferred)
+            all_deferred_results.append({
+                "acquisition_date": str(lot.acquisition_date),
+                "units": str(lot.units),
+                "lot_excess": str(lot_excess),
+                "year_results": deferred["year_results"],
+                "ordinary_income": deferred["ordinary_income"],
+                "total_deferred_tax": deferred["total_deferred_tax"],
+                "total_interest": deferred["total_interest"],
+                "grand_total": deferred["grand_total"],
+            })
 
     # Aggregate totals
     total_tax = sum(Decimal(d["total_deferred_tax"]) for d in all_deferred_results)
