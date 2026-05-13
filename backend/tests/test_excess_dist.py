@@ -101,3 +101,14 @@ def test_split_no_excess():
     non_excess, excess = split_distribution(D("1000"), D("900"))
     assert excess == D("0.00")
     assert non_excess == D("1000.00")
+
+
+# ── TC-07: Zero prior distributions (no ZeroDivisionError) ───────────────────
+
+def test_tc07_zero_prior_distributions_no_divide_by_zero():
+    avg = compute_prior_3yr_average([], holding_years=2)
+    assert avg == D("0")
+
+    non_excess, excess = split_distribution(D("3000.00"), avg)
+    assert excess == D("3000.00")
+    assert non_excess == D("0.00")

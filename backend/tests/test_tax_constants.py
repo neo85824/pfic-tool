@@ -12,8 +12,8 @@ from pfic_engine.core.tax_constants import (
 )
 
 
-def test_rate_table_has_157_entries():
-    assert len(IRS_6621_RATES) == 157
+def test_rate_table_has_158_entries():
+    assert len(IRS_6621_RATES) == 158
 
 
 def test_rate_table_starts_1987_q1():
@@ -21,10 +21,10 @@ def test_rate_table_starts_1987_q1():
     assert IRS_6621_RATES[0].quarter == 1
 
 
-def test_rate_table_ends_2026_q1():
+def test_rate_table_ends_2026_q2():
     last = IRS_6621_RATES[-1]
     assert last.year == 2026
-    assert last.quarter == 1
+    assert last.quarter == 2
 
 
 def test_rate_lookup_known_values():

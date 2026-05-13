@@ -59,18 +59,18 @@ def test_allocation_total_days():
         disposition_date=date(2021, 12, 31),
         current_tax_year=2021,
     )
-    assert result["total_days"] == 365
+    assert result["total_days"] == 364
 
 
 def test_allocation_leap_year():
-    # 2020 is a leap year (366 days)
+    # 2020 is a leap year; distribution date excluded → (12/31 − 1/1).days = 365
     result = allocate_excess_distribution(
         excess_amount=D("1000.00"),
         acquisition_date=date(2020, 1, 1),
         disposition_date=date(2020, 12, 31),
         current_tax_year=2020,
     )
-    assert result["total_days"] == 366
+    assert result["total_days"] == 365
 
 
 def test_pre_pfic_classification():
@@ -85,6 +85,71 @@ def test_pre_pfic_classification():
         if year in result["year_buckets"]:
             assert result["year_buckets"][year]["classification"] == expected_cls, \
                 f"Year {year}: expected {expected_cls}, got {result['year_buckets'][year]['classification']}"
+
+
+# ── TC-MAIN L1 spot-check ────────────────────────────────────────────────────
+
+def test_tc_main_l1_day_allocation():
+    result = allocate_excess_distribution(
+        excess_amount=D("581.41"),
+        acquisition_date=date(2021, 9, 6),
+        disposition_date=date(2022, 12, 31),
+        current_tax_year=2022,
+    )
+    assert result["total_days"] == 481
+    assert result["year_buckets"][2021]["days"] == 117
+    assert result["year_buckets"][2022]["days"] == 364
+    assert abs(result["year_buckets"][2021]["amount"] - D("141.42")) < D("0.01")
+    assert abs(result["year_buckets"][2022]["amount"] - D("439.99")) < D("0.01")
+
+
+# ── TC-04: Same-year purchase + distribution ──────────────────────────────────
+
+def test_tc04_same_year_all_current():
+    result = allocate_excess_distribution(
+        excess_amount=D("500.00"),
+        acquisition_date=date(2022, 3, 1),
+        disposition_date=date(2022, 12, 31),
+        current_tax_year=2022,
+    )
+    for bucket in result["year_buckets"].values():
+        assert bucket["classification"] == DayClassification.CURRENT_YEAR
+    assert DayClassification.PRIOR_PFIC not in {
+        b["classification"] for b in result["year_buckets"].values()
+    }
+
+
+# ── TC-05: Leap year day count (2024) ────────────────────────────────────────
+
+def test_tc05_leap_year_day_buckets():
+    result = allocate_excess_distribution(
+        excess_amount=D("10000.00"),
+        acquisition_date=date(2022, 1, 1),
+        disposition_date=date(2024, 12, 31),
+        current_tax_year=2024,
+    )
+    assert result["total_days"] == 1095
+    assert result["year_buckets"][2022]["days"] == 365
+    assert result["year_buckets"][2023]["days"] == 365
+    assert result["year_buckets"][2024]["days"] == 365  # 2024 is leap but Dec 31 excluded
+    assert sum(b["days"] for b in result["year_buckets"].values()) == 1095
+
+
+# ── TC-06: Pre-PFIC boundary ─────────────────────────────────────────────────
+
+def test_tc06_pre_pfic_boundary():
+    result = allocate_excess_distribution(
+        excess_amount=D("10000.00"),
+        acquisition_date=date(1985, 1, 1),
+        disposition_date=date(2022, 12, 31),
+        current_tax_year=2022,
+    )
+    assert result["year_buckets"][1985]["classification"] == DayClassification.PRE_PFIC
+    assert result["year_buckets"][1986]["classification"] == DayClassification.PRE_PFIC
+    assert result["year_buckets"][1987]["classification"] == DayClassification.PRIOR_PFIC
+    assert result["year_buckets"][2022]["classification"] == DayClassification.CURRENT_YEAR
+    assert result["year_buckets"][1985]["days"] == 365
+    assert result["year_buckets"][1986]["days"] == 365
 
 
 def test_aggregate_by_classification():

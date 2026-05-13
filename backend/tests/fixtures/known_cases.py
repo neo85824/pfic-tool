@@ -149,6 +149,66 @@ MULTIPLE_DISTRIBUTIONS_125PCT = {
 }
 
 
+# ── TC-MAIN: 6-lot, 2 distributions (2021 + 2022) ───────────────────────────
+
+TC_MAIN_2022 = {
+    "description": "TC-MAIN: 6 lots (3 from 2021, 3 from 2022), distribution 2022-12-31",
+    "transactions": [
+        {"date": date(2021,  9,  6), "type": "purchase",     "units": D("2496.45"), "amount": D("17600.00")},
+        {"date": date(2021,  9,  7), "type": "purchase",     "units": D("2127.66"), "amount": D("15000.00")},
+        {"date": date(2021,  9,  8), "type": "purchase",     "units": D("2130.68"), "amount": D("15000.00")},
+        {"date": date(2021, 12, 31), "type": "distribution", "units": None,         "amount": D("658.59")},
+        {"date": date(2022, 10, 26), "type": "purchase",     "units": D("127.04"),  "amount": D("700.00")},
+        {"date": date(2022, 11, 27), "type": "purchase",     "units": D("123.46"),  "amount": D("700.00")},
+        {"date": date(2022, 11, 28), "type": "purchase",     "units": D("123.24"),  "amount": D("700.00")},
+        {"date": date(2022, 12, 31), "type": "distribution", "units": None,         "amount": D("2483.45")},
+    ],
+    "tax_year": 2022,
+    "expected_prior_avg":   D("658.59"),
+    "expected_excess":      D("1660.21"),
+    "expected_non_excess":  D("823.24"),
+    "expected_lot_excess": {
+        0: D("581.41"),
+        1: D("495.52"),
+        2: D("496.23"),
+        3: D("29.59"),
+        4: D("28.75"),
+        5: D("28.71"),
+    },
+    "expected_prior_year_total":   D("380.31"),
+    "expected_current_year_total": D("1279.90"),
+    "expected_deferred_tax":       D("140.72"),
+    "expected_interest":           D("8.16"),
+    "expected_grand_total":        D("148.88"),
+}
+
+TC_MAIN_LOT_DAYS = {
+    "description": "TC-MAIN per-lot day counts and allocated amounts",
+    "lots": [
+        {"acq": date(2021, 9, 6),  "total_days": 481, "prior_days": 117, "current_days": 364,
+         "excess": D("581.41"), "prior_amount": D("141.42"), "current_amount": D("439.99"),
+         "prior_tax": D("52.33"), "interest": D("3.03")},
+        {"acq": date(2021, 9, 7),  "total_days": 480, "prior_days": 116, "current_days": 364,
+         "excess": D("495.52"), "prior_amount": D("119.75"), "current_amount": D("375.77"),
+         "prior_tax": D("44.31"), "interest": D("2.57")},
+        {"acq": date(2021, 9, 8),  "total_days": 479, "prior_days": 115, "current_days": 364,
+         "excess": D("496.23"), "prior_amount": D("119.14"), "current_amount": D("377.09"),
+         "prior_tax": D("44.08"), "interest": D("2.56")},
+        {"acq": date(2022, 10, 26), "total_days": 66, "prior_days": 0, "current_days": 66,
+         "excess": D("29.59"), "prior_amount": D("0.00"), "current_amount": D("29.59"),
+         "prior_tax": D("0.00"), "interest": D("0.00")},
+        {"acq": date(2022, 11, 27), "total_days": 34, "prior_days": 0, "current_days": 34,
+         "excess": D("28.75"), "prior_amount": D("0.00"), "current_amount": D("28.75"),
+         "prior_tax": D("0.00"), "interest": D("0.00")},
+        {"acq": date(2022, 11, 28), "total_days": 33, "prior_days": 0, "current_days": 33,
+         "excess": D("28.71"), "prior_amount": D("0.00"), "current_amount": D("28.71"),
+         "prior_tax": D("0.00"), "interest": D("0.00")},
+    ],
+    "interest_start": date(2022, 4, 18),
+    "interest_end":   date(2023, 4, 18),
+}
+
+
 # ── Interest calculation spot-check ─────────────────────────────────────────
 # Verifiable independently: $1,000 deferred tax, 2022 Q1 rate = 3%, one quarter only
 

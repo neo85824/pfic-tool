@@ -101,3 +101,34 @@ def test_lot_tracker_fifo_order():
     # FIFO: oldest (2018) lot consumed first
     assert event.fifo_result.matches[0].lot.acquisition_date == date(2018, 1, 1)
     assert date(2018, 1, 1) in [m.lot.acquisition_date for m in event.fifo_result.matches]
+
+
+# ── TC-08: FIFO partial sale ──────────────────────────────────────────────────
+
+def test_tc08_fifo_partial_sale():
+    lots = [
+        make_lot("L1", date(2020, 1, 1), 100, "100.00"),   # cost basis $10,000
+        make_lot("L2", date(2021, 1, 1), 100, "120.00"),   # cost basis $12,000
+    ]
+    result, remaining = match_fifo(lots, D("150"), date(2022, 12, 31))
+
+    # L1 fully consumed
+    assert result.matches[0].lot.lot_id == "L1"
+    assert result.matches[0].units_sold == D("100")
+
+    # L2 partially consumed: 50 sold
+    assert result.matches[1].lot.lot_id == "L2"
+    assert result.matches[1].units_sold == D("50")
+
+    # Residual: 50 units of L2, original acquisition date preserved
+    assert len(remaining) == 1
+    assert remaining[0].units == D("50")
+    assert remaining[0].acquisition_date == date(2021, 1, 1)
+
+    # Gain: L1=$5,000, L2=$1,500 → total $6,500
+    total_proceeds = D("22500")
+    l1_proceeds = total_proceeds * (D("100") / D("150"))
+    l2_proceeds = total_proceeds * (D("50") / D("150"))
+    l1_gain = l1_proceeds - D("10000.00")
+    l2_gain = l2_proceeds - D("6000.00")
+    assert abs(l1_gain + l2_gain - D("6500.00")) < D("0.01")

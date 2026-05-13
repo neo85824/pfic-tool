@@ -10,8 +10,10 @@ Form 8621 Instructions (Rev. 12/2025), Line 16a:
 from decimal import Decimal
 from datetime import date
 
+from datetime import timedelta
+
 from pfic_engine.core.decimal_utils import to_decimal, safe_divide
-from pfic_engine.core.date_utils import holding_days, calendar_year_days_in_range
+from pfic_engine.core.date_utils import calendar_year_days_in_range
 
 FIRST_PFIC_YEAR = 1987  # IRC §1291 does not apply before 1987
 
@@ -59,10 +61,12 @@ def allocate_excess_distribution(
     }
     """
     excess_amount = to_decimal(excess_amount)
-    total_days = holding_days(acquisition_date, disposition_date)
+    # Holding days = distribution_date − purchase_date (distribution date excluded)
+    total_days = (disposition_date - acquisition_date).days
     daily_amount = safe_divide(excess_amount, Decimal(str(total_days)))
 
-    year_days = calendar_year_days_in_range(acquisition_date, disposition_date)
+    # Exclude the distribution date itself from year buckets
+    year_days = calendar_year_days_in_range(acquisition_date, disposition_date - timedelta(days=1))
     year_buckets: dict[int, dict] = {}
 
     running_total = Decimal("0")

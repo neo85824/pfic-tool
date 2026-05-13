@@ -108,3 +108,26 @@ def test_covid_2019_deadline_used_in_interest():
 def test_covid_2020_deadline():
     from pfic_engine.core.tax_constants import get_filing_deadline
     assert get_filing_deadline(2020) == date(2021, 5, 17)
+
+
+# ── TC-MAIN Phase 5: L1 interest verifier ───────────────────────────────────
+
+def test_tc_main_l1_interest():
+    # $52.33 deferred tax, 2022-04-18 → 2023-04-18 (2022 filing deadline)
+    # Engine uses 366-day inclusive counting; expected ≈ $3.04
+    interest = calculate_interest_for_year_bucket(
+        D("52.33"),
+        date(2022, 4, 18),
+        date(2023, 4, 18),
+    )
+    assert abs(interest - D("3.04")) < D("0.02")
+
+
+def test_tc_main_interest_rate_periods_count():
+    periods = get_rate_periods(date(2022, 4, 18), date(2023, 4, 18))
+    assert len(periods) == 5
+    assert periods[0].annual_rate == D("0.04")  # 2022 Q2
+    assert periods[1].annual_rate == D("0.05")  # 2022 Q3
+    assert periods[2].annual_rate == D("0.06")  # 2022 Q4
+    assert periods[3].annual_rate == D("0.07")  # 2023 Q1
+    assert periods[4].annual_rate == D("0.07")  # 2023 Q2

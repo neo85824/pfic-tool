@@ -18,6 +18,7 @@ from pfic_engine.section_1291.excess_dist import (
     compute_prior_3yr_average,
     split_distribution,
 )
+from pfic_engine.section_1291.lot_shares import compute_lot_shares
 from pfic_engine.section_1291.daily_allocation import allocate_excess_distribution
 from pfic_engine.section_1291.deferred_tax import compute_deferred_tax_with_interest
 from pfic_engine.lot.lot_tracker import LotTracker
@@ -135,12 +136,17 @@ def run_calculation(
 
     # Process each lot that was held during this distribution / sale
     if excess > Decimal("0"):
-        for lot in tracker.lots:
-            if lot.acquisition_date.year > tax_year:
-                continue
+        eligible_lots = [l for l in tracker.lots if l.acquisition_date.year <= tax_year]
+        total_units = sum(l.units for l in eligible_lots)
+
+        lot_excess_amounts = compute_lot_shares(
+            excess, [l.units for l in eligible_lots]
+        )
+
+        for lot, lot_excess in zip(eligible_lots, lot_excess_amounts):
             disposition_date = date(tax_year, 12, 31)
             alloc = allocate_excess_distribution(
-                excess_amount=excess,
+                excess_amount=lot_excess,
                 acquisition_date=lot.acquisition_date,
                 disposition_date=disposition_date,
                 current_tax_year=tax_year,
