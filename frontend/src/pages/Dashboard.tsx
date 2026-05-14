@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { clientsApi, type Client } from '../api'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 
 export default function Dashboard() {
   const [clients, setClients] = useState<Client[]>([])
@@ -93,9 +93,17 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 px-6 py-4">
-        <h1 className="text-xl font-bold text-slate-800">PFIC §1291 Calculator</h1>
-        <p className="text-xs text-slate-500">Excess Distribution — IRC §1291 / Form 8621 Part V</p>
+      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-slate-800">PFIC §1291 Calculator</h1>
+          <p className="text-xs text-slate-500">Excess Distribution — IRC §1291 / Form 8621 Part V</p>
+        </div>
+        <Link
+          to="/manual"
+          className="text-sm text-slate-500 hover:text-blue-600 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-blue-300 transition-colors"
+        >
+          User Manual
+        </Link>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">

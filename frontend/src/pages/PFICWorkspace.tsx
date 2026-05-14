@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { txnsApi, calcApi, holdingContextApi, exportUrl, type Holding, type Transaction, type CalculationDetail, type HoldingContext } from '../api'
 
 type Step = 1 | 2 | 3 | 4 | 5
@@ -167,12 +167,20 @@ export default function PFICWorkspace() {
           )}
           <p className="text-xs text-slate-500">§1291 Excess Distribution · USD</p>
         </div>
-        <button
-          onClick={() => setShowMethodology(true)}
-          className="ml-auto text-sm text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg font-medium"
-        >
-          How we calculate ↗
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <Link
+            to="/manual"
+            className="text-sm text-slate-500 hover:text-blue-600 px-3 py-2 rounded-lg border border-slate-200 hover:border-blue-300 transition-colors"
+          >
+            User Manual
+          </Link>
+          <button
+            onClick={() => setShowMethodology(true)}
+            className="text-sm text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg font-medium"
+          >
+            How we calculate ↗
+          </button>
+        </div>
       </header>
 
       {/* Methodology modal */}

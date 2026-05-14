@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { clientsApi, holdingsApi, type Client, type Holding } from '../api'
 
 
@@ -124,8 +124,8 @@ export default function ClientDetail() {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
-        <button onClick={() => nav('/')} className="text-slate-400 hover:text-slate-700 text-sm">← Dashboard</button>
-        <div className="group flex items-center gap-2">
+        <button onClick={() => nav('/')} className="text-slate-400 hover:text-slate-700 text-sm shrink-0">← Dashboard</button>
+        <div className="group flex items-center gap-2 flex-1">
           {renamingClient ? (
             <input
               autoFocus
@@ -154,6 +154,12 @@ export default function ClientDetail() {
           )}
           {client.tax_year_start && <p className="text-xs text-slate-500">First year: {client.tax_year_start}</p>}
         </div>
+        <Link
+          to="/manual"
+          className="text-sm text-slate-500 hover:text-blue-600 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-blue-300 transition-colors shrink-0"
+        >
+          User Manual
+        </Link>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
