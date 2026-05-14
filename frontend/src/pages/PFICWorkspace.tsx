@@ -799,7 +799,7 @@ export default function PFICWorkspace() {
                     <p className="font-mono">{firstYear} → {fr.tax_year}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 mb-1">Total Days</p>
+                    <p className="text-xs text-slate-500 mb-1">Total Lot-Days</p>
                     <p className="font-bold">{totalDays.toLocaleString()} days</p>
                   </div>
                   <div>
