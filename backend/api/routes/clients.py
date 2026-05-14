@@ -14,6 +14,12 @@ class ClientCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class ClientUpdate(BaseModel):
+    client_code: Optional[str] = None
+    tax_year_start: Optional[int] = None
+    notes: Optional[str] = None
+
+
 class ClientOut(BaseModel):
     id: str
     client_code: str
@@ -45,6 +51,24 @@ def get_client(client_id: str, db: Session = Depends(get_db), user: User = Depen
     c = db.query(Client).filter_by(id=client_id, user_id=user.id).first()
     if not c:
         raise HTTPException(404, "Client not found")
+    return c
+
+
+@router.patch("/{client_id}", response_model=ClientOut)
+def update_client(client_id: str, req: ClientUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    c = db.query(Client).filter_by(id=client_id, user_id=user.id).first()
+    if not c:
+        raise HTTPException(404, "Client not found")
+    if req.client_code is not None:
+        if req.client_code != c.client_code and db.query(Client).filter_by(user_id=user.id, client_code=req.client_code).first():
+            raise HTTPException(400, "Client code already exists")
+        c.client_code = req.client_code
+    if req.tax_year_start is not None:
+        c.tax_year_start = req.tax_year_start
+    if req.notes is not None:
+        c.notes = req.notes
+    db.commit()
+    db.refresh(c)
     return c
 
 

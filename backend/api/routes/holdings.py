@@ -17,6 +17,12 @@ class HoldingCreate(BaseModel):
     first_pfic_year: Optional[int] = None
 
 
+class HoldingUpdate(BaseModel):
+    pfic_name: Optional[str] = None
+    reference_id: Optional[str] = None
+    first_pfic_year: Optional[int] = None
+
+
 class HoldingOut(BaseModel):
     id: str
     pfic_name: str
@@ -59,6 +65,23 @@ def get_holding(client_id: str, holding_id: str, db: Session = Depends(get_db), 
     h = db.query(PFICHolding).filter_by(id=holding_id, client_id=client_id).first()
     if not h:
         raise HTTPException(404, "Holding not found")
+    return h
+
+
+@router.patch("/{holding_id}", response_model=HoldingOut)
+def update_holding(client_id: str, holding_id: str, req: HoldingUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    _get_client(client_id, user, db)
+    h = db.query(PFICHolding).filter_by(id=holding_id, client_id=client_id).first()
+    if not h:
+        raise HTTPException(404, "Holding not found")
+    if req.pfic_name is not None:
+        h.pfic_name = req.pfic_name
+    if req.reference_id is not None:
+        h.reference_id = req.reference_id
+    if req.first_pfic_year is not None:
+        h.first_pfic_year = req.first_pfic_year
+    db.commit()
+    db.refresh(h)
     return h
 
 

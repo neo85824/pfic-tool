@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { clientsApi, holdingsApi, type Client, type Holding } from '../api'
 
+
 export default function ClientDetail() {
   const { clientId } = useParams<{ clientId: string }>()
   const nav = useNavigate()
@@ -13,6 +14,10 @@ export default function ClientDetail() {
   const [editMode, setEditMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renamingVal, setRenamingVal] = useState('')
+  const [renamingClient, setRenamingClient] = useState(false)
+  const [clientNameVal, setClientNameVal] = useState('')
 
   const load = async () => {
     const [c, h] = await Promise.all([
@@ -75,6 +80,38 @@ export default function ClientDetail() {
     }
   }
 
+  const startRename = (e: React.MouseEvent, h: Holding) => {
+    e.stopPropagation()
+    setRenamingId(h.id)
+    setRenamingVal(h.pfic_name)
+  }
+
+  const saveRename = async (h: Holding) => {
+    const val = renamingVal.trim()
+    if (val && val !== h.pfic_name) {
+      try {
+        await holdingsApi.update(clientId!, h.id, { pfic_name: val })
+        load()
+      } catch (err: any) {
+        alert(err.response?.data?.detail || 'Rename failed')
+      }
+    }
+    setRenamingId(null)
+  }
+
+  const saveClientRename = async () => {
+    const val = clientNameVal.trim()
+    if (val && client && val !== client.client_code) {
+      try {
+        await clientsApi.update(clientId!, { client_code: val })
+        load()
+      } catch (err: any) {
+        alert(err.response?.data?.detail || 'Rename failed')
+      }
+    }
+    setRenamingClient(false)
+  }
+
   const deleteSingle = async (e: React.MouseEvent, h: Holding) => {
     e.stopPropagation()
     if (!confirm(`Delete holding "${h.pfic_name}"?\n\nThis will remove all associated transactions and calculations.`)) return
@@ -88,8 +125,33 @@ export default function ClientDetail() {
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
         <button onClick={() => nav('/')} className="text-slate-400 hover:text-slate-700 text-sm">← Dashboard</button>
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">{client.client_code}</h1>
+        <div className="group flex items-center gap-2">
+          {renamingClient ? (
+            <input
+              autoFocus
+              value={clientNameVal}
+              onChange={(e) => setClientNameVal(e.target.value)}
+              onBlur={saveClientRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveClientRename()
+                if (e.key === 'Escape') setRenamingClient(false)
+              }}
+              className="border border-blue-400 rounded px-2 py-0.5 text-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+          ) : (
+            <>
+              <h1 className="text-xl font-bold text-slate-800">{client.client_code}</h1>
+              <button
+                onClick={() => { setRenamingClient(true); setClientNameVal(client.client_code) }}
+                className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-blue-600 p-1 rounded transition-all"
+                title="Rename client"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                </svg>
+              </button>
+            </>
+          )}
           {client.tax_year_start && <p className="text-xs text-slate-500">First year: {client.tax_year_start}</p>}
         </div>
       </header>
@@ -197,7 +259,10 @@ export default function ClientDetail() {
               {holdings.map((h) => (
                 <div
                   key={h.id}
-                  onClick={() => editMode ? toggleSelect(h.id) : nav(`/holdings/${h.id}`)}
+                  onClick={() => {
+                    if (renamingId === h.id) return
+                    editMode ? toggleSelect(h.id) : nav(`/holdings/${h.id}`)
+                  }}
                   className={`group bg-white rounded-xl border px-5 py-4 flex items-center gap-3 cursor-pointer transition-all
                     ${editMode && selected.has(h.id)
                       ? 'border-red-300 bg-red-50'
@@ -213,21 +278,47 @@ export default function ClientDetail() {
                     />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-800">{h.pfic_name}</p>
+                    {renamingId === h.id ? (
+                      <input
+                        autoFocus
+                        value={renamingVal}
+                        onChange={(e) => setRenamingVal(e.target.value)}
+                        onBlur={() => saveRename(h)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveRename(h)
+                          if (e.key === 'Escape') setRenamingId(null)
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="border border-blue-400 rounded px-2 py-0.5 text-sm font-medium text-slate-800 w-full focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      />
+                    ) : (
+                      <p className="font-medium text-slate-800">{h.pfic_name}</p>
+                    )}
                     <p className="text-xs text-slate-500">
                       {h.currency} · §{h.method} · {h.first_pfic_year ? `First PFIC year: ${h.first_pfic_year}` : 'First PFIC year: not set'}
                     </p>
                   </div>
                   {editMode ? null : (
-                    <button
-                      onClick={(e) => deleteSingle(e, h)}
-                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 p-1 rounded transition-all"
-                      title="Delete holding"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 112 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
-                      </svg>
-                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <button
+                        onClick={(e) => startRename(e, h)}
+                        className="text-slate-400 hover:text-blue-600 p-1 rounded"
+                        title="Rename holding"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={(e) => deleteSingle(e, h)}
+                        className="text-slate-400 hover:text-red-600 p-1 rounded"
+                        title="Delete holding"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 112 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
                   )}
                   {!editMode && <span className="text-slate-400 text-lg">→</span>}
                 </div>

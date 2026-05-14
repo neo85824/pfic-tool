@@ -12,6 +12,8 @@ export default function Dashboard() {
   const [editMode, setEditMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renamingVal, setRenamingVal] = useState('')
   const nav = useNavigate()
 
   const load = () => clientsApi.list().then((r) => { setClients(r.data); setLoading(false) })
@@ -61,6 +63,25 @@ export default function Dashboard() {
     } finally {
       setDeleting(false)
     }
+  }
+
+  const startRename = (e: React.MouseEvent, c: Client) => {
+    e.stopPropagation()
+    setRenamingId(c.id)
+    setRenamingVal(c.client_code)
+  }
+
+  const saveRename = async (id: string) => {
+    const val = renamingVal.trim()
+    if (val && val !== clients.find((c) => c.id === id)?.client_code) {
+      try {
+        await clientsApi.update(id, { client_code: val })
+        load()
+      } catch (err: any) {
+        alert(err.response?.data?.detail || 'Rename failed')
+      }
+    }
+    setRenamingId(null)
   }
 
   const deleteSingle = async (e: React.MouseEvent, c: Client) => {
@@ -173,7 +194,10 @@ export default function Dashboard() {
               {clients.map((c) => (
                 <div
                   key={c.id}
-                  onClick={() => editMode ? toggleSelect(c.id) : nav(`/clients/${c.id}`)}
+                  onClick={() => {
+                    if (renamingId === c.id) return
+                    editMode ? toggleSelect(c.id) : nav(`/clients/${c.id}`)
+                  }}
                   className={`group bg-white rounded-xl border px-5 py-4 flex items-center gap-3 cursor-pointer transition-all
                     ${editMode && selected.has(c.id)
                       ? 'border-red-300 bg-red-50'
@@ -189,19 +213,45 @@ export default function Dashboard() {
                     />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-800">{c.client_code}</p>
+                    {renamingId === c.id ? (
+                      <input
+                        autoFocus
+                        value={renamingVal}
+                        onChange={(e) => setRenamingVal(e.target.value)}
+                        onBlur={() => saveRename(c.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveRename(c.id)
+                          if (e.key === 'Escape') setRenamingId(null)
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="border border-blue-400 rounded px-2 py-0.5 text-sm font-medium text-slate-800 w-full focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      />
+                    ) : (
+                      <p className="font-medium text-slate-800">{c.client_code}</p>
+                    )}
                     {c.tax_year_start && <p className="text-xs text-slate-500">First year: {c.tax_year_start}</p>}
                   </div>
                   {editMode ? null : (
-                    <button
-                      onClick={(e) => deleteSingle(e, c)}
-                      className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 p-1 rounded transition-all"
-                      title="Delete client"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 112 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
-                      </svg>
-                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                      <button
+                        onClick={(e) => startRename(e, c)}
+                        className="text-slate-400 hover:text-blue-600 p-1 rounded"
+                        title="Rename client"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={(e) => deleteSingle(e, c)}
+                        className="text-slate-400 hover:text-red-600 p-1 rounded"
+                        title="Delete client"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 112 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
                   )}
                   {!editMode && <span className="text-slate-400 text-lg">→</span>}
                 </div>

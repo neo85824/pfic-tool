@@ -69,6 +69,7 @@ export const clientsApi = {
   list: () => api.get<Client[]>('/clients/'),
   create: (data: Partial<Client>) => api.post<Client>('/clients/', data),
   get: (id: string) => api.get<Client>(`/clients/${id}`),
+  update: (id: string, data: Partial<Client>) => api.patch<Client>(`/clients/${id}`, data),
   delete: (id: string) => api.delete(`/clients/${id}`),
 }
 
@@ -78,6 +79,8 @@ export const holdingsApi = {
   list: (clientId: string) => api.get<Holding[]>(`/clients/${clientId}/holdings/`),
   create: (clientId: string, data: Partial<Holding>) =>
     api.post<Holding>(`/clients/${clientId}/holdings/`, data),
+  update: (clientId: string, holdingId: string, data: Partial<Holding>) =>
+    api.patch<Holding>(`/clients/${clientId}/holdings/${holdingId}`, data),
   delete: (clientId: string, holdingId: string) =>
     api.delete(`/clients/${clientId}/holdings/${holdingId}`),
 }
