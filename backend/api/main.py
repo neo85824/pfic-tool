@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.auth import router as auth_router
 from api.routes.clients import router as clients_router
 from api.routes.holdings import router as holdings_router
 from api.routes.transactions import router as transactions_router
@@ -33,6 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(clients_router)
 app.include_router(holdings_router)
 app.include_router(transactions_router)

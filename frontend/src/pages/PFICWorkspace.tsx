@@ -28,6 +28,8 @@ export default function PFICWorkspace() {
   const [error, setError] = useState('')
   const [csvStatus, setCsvStatus] = useState('')
   const [showMethodology, setShowMethodology] = useState(false)
+  const [exportError, setExportError] = useState('')
+  const [showRawJson, setShowRawJson] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const updateTaxYear = (year: number) => {
@@ -99,18 +101,54 @@ export default function PFICWorkspace() {
     }
   }
 
-  const downloadExport = (type: 'pdf' | 'line16a' | 'excel') => {
+  const exportTxnsCsv = () => {
+    const header = 'date,type,units,amount_usd,notes'
+    const rows = txns.map(t =>
+      [t.txn_date, t.txn_type, t.units ?? '', t.total_value_usd, t.notes ?? ''].join(',')
+    )
+    const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `transactions_${holdingId}_${taxYear}.csv`
+    a.click()
+  }
+
+  const downloadTemplate = () => {
+    const csv = [
+      'date,type,units,amount_usd,notes',
+      '2020-01-15,purchase,100,10000.00,Initial purchase',
+      '2021-06-30,distribution,,500.00,Annual distribution',
+      '2022-06-30,distribution,,800.00,Annual distribution',
+      '2023-06-30,distribution,,2500.00,Current year distribution',
+      '2024-12-31,sale,100,18000.00,Full exit',
+    ].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'pfic_transactions_template.csv'
+    a.click()
+  }
+
+  const downloadExport = async (type: 'pdf' | 'line16a' | 'excel') => {
     const token = localStorage.getItem('token')
     const url = exportUrl(holdingId!, taxYear, type)
-    // Open with auth — use fetch + blob
-    fetch('/api' + url.replace('/api', ''), { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.blob())
-      .then((blob) => {
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(blob)
-        a.download = `Form8621_${type}_${taxYear}.${type === 'excel' ? 'xlsx' : 'pdf'}`
-        a.click()
-      })
+    setExportError('')
+    try {
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      if (!r.ok) {
+        let msg = `Export failed (${r.status})`
+        try { const j = await r.json(); msg = j.detail || msg } catch {}
+        setExportError(msg)
+        return
+      }
+      const blob = await r.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `Form8621_${type}_${taxYear}.${type === 'excel' ? 'xlsx' : 'pdf'}`
+      a.click()
+    } catch (err: any) {
+      setExportError('Export failed: ' + err.message)
+    }
   }
 
   return (
@@ -472,12 +510,18 @@ export default function PFICWorkspace() {
                 Columns: <code className="bg-slate-100 px-1 rounded">date, type, units, amount_usd, notes</code>
                 &nbsp;· Types: purchase, sale, distribution, reinvestment
               </p>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <button
                   onClick={() => fileRef.current?.click()}
                   className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm px-4 py-2 rounded-lg"
                 >
                   Upload CSV
+                </button>
+                <button
+                  onClick={downloadTemplate}
+                  className="text-blue-600 hover:text-blue-800 text-sm px-4 py-2 rounded-lg border border-blue-200 hover:bg-blue-50"
+                >
+                  Download Template
                 </button>
                 <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleCsvUpload} />
                 {csvStatus && <span className="text-sm text-slate-600">{csvStatus}</span>}
@@ -567,6 +611,14 @@ export default function PFICWorkspace() {
                 <button onClick={() => setStep(3)} className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700">
                   Next: Parameters →
                 </button>
+                {txns.length > 0 && (
+                  <button
+                    onClick={exportTxnsCsv}
+                    className="text-slate-600 hover:text-slate-800 text-sm px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50"
+                  >
+                    Export CSV
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -879,6 +931,23 @@ export default function PFICWorkspace() {
                 </table>
               </div>
 
+              {/* Raw API JSON */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <button
+                  onClick={() => setShowRawJson(v => !v)}
+                  className="flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-slate-800 w-full text-left"
+                >
+                  <span>{showRawJson ? '▼' : '▶'}</span>
+                  <span>Raw API Response</span>
+                  <span className="text-xs text-slate-400 font-normal">(verify FE = BE)</span>
+                </button>
+                {showRawJson && (
+                  <pre className="mt-3 text-xs bg-slate-50 border border-slate-200 rounded-lg p-4 overflow-x-auto max-h-96 overflow-y-auto text-slate-700 leading-relaxed">
+                    {JSON.stringify(calcResult.full_result, null, 2)}
+                  </pre>
+                )}
+              </div>
+
               {/* Footer */}
               <div className="flex items-center justify-between">
                 <p className="text-xs text-slate-400">Engine: {calcResult.engine_version || 'dev'} · {calcResult.status}</p>
@@ -906,6 +975,11 @@ export default function PFICWorkspace() {
             {!calcResult && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700 mb-4">
                 No calculation results yet. Complete Step 3 first.
+              </div>
+            )}
+            {exportError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">
+                {exportError}
               </div>
             )}
 

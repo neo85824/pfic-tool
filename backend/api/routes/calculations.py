@@ -177,7 +177,12 @@ def run_calculation(
             except Exception as e:
                 warnings.append(f"Cross-check failed: {e}")
 
-            all_year_buckets.update(alloc["year_buckets"])
+            for yr, bucket in alloc["year_buckets"].items():
+                if yr in all_year_buckets:
+                    all_year_buckets[yr]["days"] += bucket["days"]
+                    all_year_buckets[yr]["amount"] += bucket["amount"]
+                else:
+                    all_year_buckets[yr] = dict(bucket)
             all_deferred_results.append({
                 "acquisition_date": str(lot.acquisition_date),
                 "units": str(lot.units),

@@ -1,11 +1,13 @@
 """
-Form 8621 Part V calculation report — PDF workpaper.
-
-Generates a structured PDF that mirrors Form 8621 Part V line numbers.
-Includes Line 16a daily allocation attachment per §6501(c)(8) requirement.
+Form 8621 Part V calculation workpaper PDF.
+Mirrors the FE Result page structure:
+  1. 125% Test
+  2. Excess Distribution by Lot
+  3. Step 2 — Year-by-Year Allocation & Tax
+  4. Step 3 — §6621 Interest
+  5. Form 8621 Part V Summary
 """
 from decimal import Decimal
-from datetime import date
 from io import BytesIO
 
 from reportlab.lib import colors
@@ -14,34 +16,74 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    PageBreak, HRFlowable,
+    HRFlowable,
 )
-from reportlab.lib.enums import TA_LEFT, TA_RIGHT, TA_CENTER
+from reportlab.lib.enums import TA_RIGHT
 
-PAGE_W, PAGE_H = letter
 MARGIN = 0.75 * inch
+DARK_BLUE  = colors.HexColor("#1A365D")
+MID_BLUE   = colors.HexColor("#2D6A9F")
+LIGHT_BLUE = colors.HexColor("#EEF4FB")
+ORANGE     = colors.HexColor("#FFF3CD")
+GREY       = colors.HexColor("#F7F7F7")
+WHITE      = colors.white
 
 
-def _fmt(v, prefix="$") -> str:
+def _D(v):
+    try:
+        return Decimal(str(v))
+    except Exception:
+        return Decimal("0")
+
+
+def _fmt(v) -> str:
     if v is None:
         return "—"
     try:
-        d = Decimal(str(v))
-        return f"{prefix}{d:,.2f}"
+        return f"${_D(v):,.2f}"
     except Exception:
         return str(v)
 
 
-def _pct(v) -> str:
-    if v is None:
+def _pct(rate_decimal) -> str:
+    try:
+        return f"{_D(rate_decimal) * 100:.1f}%"
+    except Exception:
         return "—"
-    return f"{Decimal(str(v)) * 100:.1f}%"
+
+
+def _merged_year_results(deferred_tax_results):
+    merged = {}
+    for dr in deferred_tax_results:
+        for yr_key, yr_data in dr["year_results"].items():
+            yr = int(yr_key)
+            if yr not in merged:
+                merged[yr] = {
+                    "classification": yr_data["classification"],
+                    "allocated_amount": _D(yr_data["allocated_amount"]),
+                    "tax":      _D(yr_data.get("tax") or 0),
+                    "interest": _D(yr_data.get("interest") or 0),
+                    "interest_start": yr_data.get("interest_start", ""),
+                    "interest_end":   yr_data.get("interest_end", ""),
+                }
+            else:
+                merged[yr]["allocated_amount"] += _D(yr_data["allocated_amount"])
+                merged[yr]["tax"]              += _D(yr_data.get("tax") or 0)
+                merged[yr]["interest"]         += _D(yr_data.get("interest") or 0)
+    return merged
+
+
+_HDR_STYLE = TableStyle([
+    ("BACKGROUND", (0, 0), (-1, 0), DARK_BLUE),
+    ("TEXTCOLOR",  (0, 0), (-1, 0), WHITE),
+    ("FONTNAME",   (0, 0), (-1, 0), "Helvetica-Bold"),
+    ("FONTSIZE",   (0, 0), (-1, -1), 8),
+    ("GRID",       (0, 0), (-1, -1), 0.4, colors.grey),
+    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [WHITE, LIGHT_BLUE]),
+])
 
 
 def generate_form8621_workpaper(full_result: dict, holding_name: str, client_code: str) -> bytes:
-    """
-    Returns PDF bytes of the Form 8621 Part V calculation workpaper.
-    """
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=letter,
@@ -50,109 +92,170 @@ def generate_form8621_workpaper(full_result: dict, holding_name: str, client_cod
     )
     styles = getSampleStyleSheet()
     normal = styles["Normal"]
-    small = ParagraphStyle("small", parent=normal, fontSize=8)
-    bold = ParagraphStyle("bold", parent=normal, fontName="Helvetica-Bold")
-    title_style = ParagraphStyle("title", parent=normal, fontSize=14, fontName="Helvetica-Bold", spaceAfter=4)
-    warning_style = ParagraphStyle("warning", parent=normal, fontSize=9, textColor=colors.red)
+    small  = ParagraphStyle("small",  parent=normal, fontSize=8)
+    bold   = ParagraphStyle("bold",   parent=normal, fontName="Helvetica-Bold")
+    title  = ParagraphStyle("title",  parent=normal, fontSize=13, fontName="Helvetica-Bold", spaceAfter=4, textColor=DARK_BLUE)
+    sec    = ParagraphStyle("sec",    parent=normal, fontSize=10, fontName="Helvetica-Bold", textColor=DARK_BLUE, spaceBefore=12, spaceAfter=4)
+    warn   = ParagraphStyle("warn",   parent=normal, fontSize=8, textColor=colors.HexColor("#C0392B"))
 
-    tax_year = full_result.get("tax_year", "")
-    excess = full_result.get("excess_distribution", "0")
-    prior_avg = full_result.get("prior_3yr_average", "0")
-    non_excess = full_result.get("non_excess_ordinary", "0")
-    total_tax = full_result.get("total_deferred_tax", "0")
-    total_interest = full_result.get("total_interest", "0")
-    grand_total = full_result.get("grand_total", "0")
-    ordinary_income = full_result.get("total_ordinary_income", "0")
-    warnings = full_result.get("warnings", [])
+    tax_year   = full_result.get("tax_year", "")
+    prior_avg  = _D(full_result.get("prior_3yr_average", "0"))
+    cur_dist   = _D(full_result.get("current_year_distribution", "0"))
+    non_excess = _D(full_result.get("non_excess_ordinary", "0"))
+    excess     = _D(full_result.get("excess_distribution", "0"))
+    total_tax  = _D(full_result.get("total_deferred_tax", "0"))
+    total_int  = _D(full_result.get("total_interest", "0"))
+    grand      = _D(full_result.get("grand_total", "0"))
+    ordinary   = _D(full_result.get("total_ordinary_income", "0"))
+    deferred   = full_result.get("deferred_tax_results", [])
+    year_bkts  = full_result.get("year_buckets", {})
+    warnings   = full_result.get("warnings", [])
 
     story = []
 
-    # ── Header ───────────────────────────────────────────────────────────────
-    story.append(Paragraph(f"PFIC Form 8621 — Calculation Workpaper", title_style))
+    # ── Header ────────────────────────────────────────────────────────────────
+    story.append(Paragraph("PFIC Form 8621 — Calculation Workpaper", title))
     story.append(Paragraph(f"Tax Year: {tax_year}  |  PFIC: {holding_name}  |  Client: {client_code}", normal))
-    story.append(Paragraph(f"Method: §1291 Excess Distribution  |  Currency: USD", normal))
-    story.append(HRFlowable(width="100%", thickness=2, color=colors.black, spaceAfter=8))
+    story.append(Paragraph("Method: §1291 Excess Distribution  |  Currency: USD", normal))
+    story.append(HRFlowable(width="100%", thickness=2, color=DARK_BLUE, spaceAfter=8))
 
-    # ── Warnings ─────────────────────────────────────────────────────────────
     if warnings:
-        story.append(Paragraph("⚠ WARNINGS", bold))
+        story.append(Paragraph("WARNINGS", bold))
         for w in warnings:
-            story.append(Paragraph(f"• {w}", warning_style))
-        story.append(Spacer(1, 8))
+            story.append(Paragraph(f"• {w}", warn))
+        story.append(Spacer(1, 6))
 
-    # ── Part V: Section 1291 ─────────────────────────────────────────────────
-    story.append(Paragraph("PART V — Section 1291 Method (Excess Distribution)", bold))
-    story.append(Spacer(1, 4))
-
-    summary_data = [
-        ["Line", "Description", "Amount"],
-        ["15b", "Prior 3-year average distribution", _fmt(prior_avg)],
-        ["15b(125%)", "125% threshold", _fmt(Decimal(str(prior_avg)) * Decimal("1.25"))],
-        ["15c", "Current year distribution", _fmt(full_result.get("current_year_distribution", "0"))],
-        ["15e(1)", "Non-excess (ordinary income — current year)", _fmt(non_excess)],
-        ["15e(2)", "Excess distribution amount", _fmt(excess)],
-        ["16c", "Total additional tax (prior years)", _fmt(total_tax)],
-        ["16f", "Total §6621 interest", _fmt(total_interest)],
-        ["16e+16f", "Grand total deferred tax + interest", _fmt(grand_total)],
-        ["16b", "Ordinary income (pre-PFIC + current year)", _fmt(ordinary_income)],
+    # ── 1. 125% Test ──────────────────────────────────────────────────────────
+    story.append(Paragraph("125% Test  [IRC §1291(b)(2)(A)]", sec))
+    threshold = prior_avg * Decimal("1.25")
+    test_data = [
+        ["Item", "Amount"],
+        ["15c — Current year distribution",          _fmt(cur_dist)],
+        ["15b — Prior 3-year average",               _fmt(prior_avg)],
+        ["Benchmark — 125% threshold",               _fmt(threshold)],
+        ["15e(2) — Excess distribution",             _fmt(excess)],
+        ["15e(1) — Non-excess ordinary income",      _fmt(non_excess)],
     ]
-    tbl = Table(summary_data, colWidths=[1.2 * inch, 3.8 * inch, 1.5 * inch])
-    tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1a365d")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f7f7f7")]),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("BACKGROUND", (0, -3), (-1, -3), colors.HexColor("#fff3cd")),  # grand total highlight
+    t = Table(test_data, colWidths=[4.5 * inch, 1.8 * inch])
+    t.setStyle(TableStyle([
+        *_HDR_STYLE._cmds,
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("BACKGROUND", (0, 4), (-1, 4), ORANGE),
+        ("FONTNAME",   (0, 4), (-1, 4), "Helvetica-Bold"),
     ]))
-    story.append(tbl)
-    story.append(Spacer(1, 16))
+    story.append(t)
 
-    # ── Year-by-year deferred tax detail ─────────────────────────────────────
-    deferred_results = full_result.get("deferred_tax_results", [])
-    if deferred_results:
-        story.append(Paragraph("Year-by-Year Deferred Tax Detail (Form 8621 Line 16)", bold))
-        story.append(Spacer(1, 4))
+    # ── 2. Excess Distribution by Lot ─────────────────────────────────────────
+    if deferred:
+        story.append(Paragraph("Excess Distribution by Lot  [§1291(a)(1) proportional allocation]", sec))
+        lot_data = [["Lot", "Acquired", "Units", "Excess Share", "Deferred Tax", "Interest", "Grand Total"]]
+        tot_e = tot_t = tot_i = tot_g = Decimal("0")
+        for i, dr in enumerate(deferred, 1):
+            le = _D(dr.get("lot_excess", 0))
+            tx = _D(dr.get("total_deferred_tax", 0))
+            it = _D(dr.get("total_interest", 0))
+            gt = _D(dr.get("grand_total", 0))
+            units = _D(dr.get("units", 0))
+            lot_data.append([
+                f"L{i}", dr.get("acquisition_date", ""),
+                f"{units:,.2f}", _fmt(le), _fmt(tx), _fmt(it), _fmt(gt),
+            ])
+            tot_e += le; tot_t += tx; tot_i += it; tot_g += gt
+        lot_data.append(["Total", "", "", _fmt(tot_e), _fmt(tot_t), _fmt(tot_i), _fmt(tot_g)])
 
-        detail_data = [["Year", "Class.", "Allocated Amount", "Tax Rate", "Tax", "Interest Start", "Interest End", "Interest"]]
-        for dr in deferred_results:
-            for yr_str, yr_data in sorted(dr["year_results"].items(), key=lambda x: int(x[0])):
-                cls = yr_data["classification"]
-                amt = yr_data["allocated_amount"]
-                tax = yr_data.get("tax")
-                interest = yr_data.get("interest")
-                i_start = yr_data.get("interest_start", "—")
-                i_end = yr_data.get("interest_end", "—")
-                detail_data.append([
-                    yr_str,
-                    cls.replace("_", " "),
-                    _fmt(amt),
-                    "—" if tax is None else _pct(Decimal(str(tax)) / Decimal(str(amt)) if Decimal(str(amt)) else 0),
-                    _fmt(tax),
-                    i_start[:10] if i_start else "—",
-                    i_end[:10] if i_end else "—",
-                    _fmt(interest),
-                ])
-
-        col_ws = [0.5*inch, 0.9*inch, 1.1*inch, 0.7*inch, 1.0*inch, 0.9*inch, 0.9*inch, 1.0*inch]
-        dt_tbl = Table(detail_data, colWidths=col_ws)
-        dt_tbl.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2d6a9f")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+        cw = [0.45*inch, 0.85*inch, 0.75*inch, 0.9*inch, 0.9*inch, 0.8*inch, 0.9*inch]
+        lt = Table(lot_data, colWidths=cw)
+        lt.setStyle(TableStyle([
+            *_HDR_STYLE._cmds,
             ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#eef4fb")]),
-            ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E8EEF4")),
+            ("FONTNAME",   (0, -1), (-1, -1), "Helvetica-Bold"),
         ]))
-        story.append(dt_tbl)
+        story.append(lt)
 
-    story.append(Spacer(1, 12))
+    # ── 3. Year-by-Year Allocation & Tax ──────────────────────────────────────
+    story.append(Paragraph("Step 2 — Year-by-Year Allocation & Tax  [§1291(c)(2)]", sec))
+    merged = _merged_year_results(deferred)
+    sorted_yrs = sorted(int(y) for y in year_bkts)
+
+    yr_data_rows = [["Year", "Days", "Allocated Amount", "Rate", "Deferred Tax"]]
+    tot_days = tot_alloc = tot_tax_yr = Decimal("0")
+    for yr in sorted_yrs:
+        bkt  = year_bkts[str(yr)]
+        days = bkt["days"]
+        amt  = _D(bkt["amount"])
+        cls  = bkt["classification"]
+        is_cur = cls == "current_year"
+        is_pre = cls == "pre_pfic"
+        yd   = merged.get(yr, {})
+        tax  = yd.get("tax", Decimal("0")) if not is_cur and not is_pre else Decimal("0")
+        rate = _pct(tax / amt) if amt > 0 and not is_cur and not is_pre else ("ordinary" if is_cur else "pre-PFIC")
+        yr_data_rows.append([
+            str(yr), str(days), _fmt(amt), rate,
+            "ordinary income" if (is_cur or is_pre) else _fmt(tax),
+        ])
+        tot_days += days; tot_alloc += amt; tot_tax_yr += tax
+
+    yr_data_rows.append(["Total", str(int(tot_days)), _fmt(tot_alloc), "", _fmt(tot_tax_yr)])
+    yt = Table(yr_data_rows, colWidths=[0.55*inch, 0.5*inch, 1.3*inch, 0.8*inch, 1.2*inch])
+    yt.setStyle(TableStyle([
+        *_HDR_STYLE._cmds,
+        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E8EEF4")),
+        ("FONTNAME",   (0, -1), (-1, -1), "Helvetica-Bold"),
+    ]))
+    story.append(yt)
+
+    # ── 4. §6621 Interest ─────────────────────────────────────────────────────
+    prior_yrs = sorted(yr for yr, d in merged.items() if d["classification"] == "prior_pfic")
+    if prior_yrs:
+        int_end = merged[prior_yrs[0]].get("interest_end", "")[:10]
+        story.append(Paragraph(
+            f"Step 3 — §6621 Interest  [§6622 daily compound]  |  Interest end: {int_end}", sec
+        ))
+        int_rows = [["Year", "Deferred Tax", "Filing Deadline", "§6621 Interest"]]
+        tot_it = Decimal("0")
+        for yr in prior_yrs:
+            d = merged[yr]
+            i_start = d.get("interest_start", "")[:10]
+            is_covid = i_start and i_start[5:7] not in ("04",)
+            label = i_start + (" ⚠ COVID" if is_covid else "")
+            int_rows.append([str(yr), _fmt(d["tax"]), label, _fmt(d["interest"])])
+            tot_it += d["interest"]
+        int_rows.append(["Total", "", "", _fmt(tot_it)])
+        it = Table(int_rows, colWidths=[0.5*inch, 1.2*inch, 1.4*inch, 1.2*inch])
+        it.setStyle(TableStyle([
+            *_HDR_STYLE._cmds,
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E8EEF4")),
+            ("FONTNAME",   (0, -1), (-1, -1), "Helvetica-Bold"),
+        ]))
+        story.append(it)
+
+    # ── 5. Form 8621 Part V Summary ───────────────────────────────────────────
+    story.append(Paragraph("Form 8621 Part V — Summary", sec))
+    sum_data = [
+        ["Line", "Description", "Amount"],
+        ["15e(1)", "Non-excess ordinary income (Line 16b)",        _fmt(non_excess)],
+        ["15e(2)", "Excess distribution",                          _fmt(excess)],
+        ["16c",    "Additional tax — prior PFIC years",            _fmt(total_tax)],
+        ["16f",    "§6621 interest",                               _fmt(total_int)],
+        ["16c+16f","Grand total additional liability",             _fmt(grand)],
+        ["16b",    "Total ordinary income (pre-PFIC + current yr)",_fmt(ordinary)],
+    ]
+    st = Table(sum_data, colWidths=[0.9*inch, 4.0*inch, 1.4*inch])
+    st.setStyle(TableStyle([
+        *_HDR_STYLE._cmds,
+        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+        ("BACKGROUND", (0, 5), (-1, 5), ORANGE),
+        ("FONTNAME",   (0, 5), (-1, 5), "Helvetica-Bold"),
+    ]))
+    story.append(st)
+
+    story.append(Spacer(1, 10))
     story.append(Paragraph(
-        "This workpaper is generated by PFIC Tool (pfic_engine). All calculations use Python Decimal precision. "
-        "§6621 rates from IRS IRB publications. §7503 deadlines include COVID extensions (Notice 2020-23, Notice 2021-21). "
+        "Generated by PFIC Tool (pfic_engine). §6621 rates from IRS IRB publications. "
+        "§7503 deadlines include COVID extensions (Notice 2020-23, Notice 2021-21). "
         "This document does not constitute tax advice. Verify all figures before filing.",
         small,
     ))
