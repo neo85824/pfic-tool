@@ -142,7 +142,8 @@ export default function PFICWorkspace() {
 
   const downloadExport = async (type: 'pdf' | 'line16a' | 'excel') => {
     const token = localStorage.getItem('token')
-    const url = exportUrl(holdingId!, taxYear, type)
+    const exportTaxYear = (calcResult as any)?.tax_year ?? taxYear
+    const url = exportUrl(holdingId!, exportTaxYear, type)
     setExportError('')
     try {
       const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })

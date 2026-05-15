@@ -697,3 +697,128 @@ def test_line16a_generates():
     pdf = generate_line16a_statement(r["full_result"], "TC-MAIN Fund", "CASE-001-SMITH")
     assert pdf[:4] == b"%PDF", "Not a valid PDF"
     assert len(pdf) > 2000
+
+
+# ── HTTP-level export tests (via FastAPI TestClient) ─────────────────────────
+# These mirror what the FE calls: POST /holdings/{id}/calculate → GET export/{type}
+# Values in the exported files must match the calculation result returned to the FE.
+
+@pytest.fixture(scope="module")
+def http_export_setup():
+    """Create holding, run calculation, return (client, holding_id, calc_result)."""
+    import uuid
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    tc = TestClient(app)
+    unique_code = f"HTTP-EXP-{uuid.uuid4().hex[:8].upper()}"
+    r = tc.post("/clients/", json={"client_code": unique_code})
+    assert r.status_code in (200, 201), r.text
+    cid = r.json()["id"]
+
+    r = tc.post(f"/clients/{cid}/holdings/", json={"pfic_name": "HTTP Export Fund", "currency": "USD", "method": "1291"})
+    assert r.status_code in (200, 201), r.text
+    hid = r.json()["id"]
+
+    for txn in [
+        {"txn_date": "2020-01-15", "txn_type": "purchase", "units": 100, "total_value_usd": 10000},
+        {"txn_date": "2021-06-30", "txn_type": "distribution", "total_value_usd": 500},
+        {"txn_date": "2022-06-30", "txn_type": "distribution", "total_value_usd": 800},
+        {"txn_date": "2023-06-30", "txn_type": "distribution", "total_value_usd": 2500},
+    ]:
+        tc.post(f"/holdings/{hid}/transactions/", json=txn)
+
+    r = tc.post(f"/holdings/{hid}/calculate", json={"tax_year": 2023})
+    assert r.status_code == 200, r.text
+    calc = r.json()
+
+    return tc, hid, calc
+
+
+def test_http_export_pdf_is_valid_pdf(http_export_setup):
+    tc, hid, calc = http_export_setup
+    r = tc.get(f"/holdings/{hid}/calculations/2023/export/pdf")
+    assert r.status_code == 200, f"PDF export failed: {r.text}"
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content[:4] == b"%PDF"
+    assert len(r.content) > 2000
+
+
+def test_http_export_line16a_is_valid_pdf(http_export_setup):
+    tc, hid, calc = http_export_setup
+    r = tc.get(f"/holdings/{hid}/calculations/2023/export/line16a")
+    assert r.status_code == 200, f"Line16a export failed: {r.text}"
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content[:4] == b"%PDF"
+    assert len(r.content) > 2000
+
+
+def test_http_export_excel_is_valid_xlsx(http_export_setup):
+    tc, hid, calc = http_export_setup
+    r = tc.get(f"/holdings/{hid}/calculations/2023/export/excel")
+    assert r.status_code == 200, f"Excel export failed: {r.text}"
+    assert "spreadsheetml" in r.headers["content-type"]
+    wb = openpyxl.load_workbook(io.BytesIO(r.content))
+    assert "Summary" in wb.sheetnames
+
+
+def test_http_export_excel_grand_total_matches_calc(http_export_setup):
+    """Excel grand total must match the value returned in the calc API response."""
+    tc, hid, calc = http_export_setup
+    expected_grand_total = D(calc["full_result"]["grand_total"])
+
+    r = tc.get(f"/holdings/{hid}/calculations/2023/export/excel")
+    wb = openpyxl.load_workbook(io.BytesIO(r.content))
+    ws = wb["Summary"]
+    rows = list(ws.iter_rows(values_only=True))
+
+    grand_total_row = next(
+        (row for row in rows if row[0] and "Grand total" in str(row[0])), None
+    )
+    assert grand_total_row is not None, "Grand total row not found in Excel Summary"
+    assert approx(grand_total_row[1], expected_grand_total, "0.01"), \
+        f"Excel grand total {grand_total_row[1]} != calc {expected_grand_total}"
+
+
+def test_http_export_excel_excess_matches_calc(http_export_setup):
+    """Excel excess distribution must match the calc result."""
+    tc, hid, calc = http_export_setup
+    expected_excess = D(calc["full_result"]["excess_distribution"])
+
+    r = tc.get(f"/holdings/{hid}/calculations/2023/export/excel")
+    wb = openpyxl.load_workbook(io.BytesIO(r.content))
+    ws = wb["Summary"]
+    rows = list(ws.iter_rows(values_only=True))
+
+    excess_row = next(
+        (row for row in rows if row[0] and "Excess distribution" in str(row[0]) and "15e(2)" in str(row[0])), None
+    )
+    assert excess_row is not None, "Excess distribution row not found in Excel Summary"
+    assert approx(excess_row[1], expected_excess, "0.01"), \
+        f"Excel excess {excess_row[1]} != calc {expected_excess}"
+
+
+def test_http_export_excel_interest_matches_calc(http_export_setup):
+    """Excel §6621 interest must match the calc result."""
+    tc, hid, calc = http_export_setup
+    expected_interest = D(calc["full_result"]["total_interest"])
+
+    r = tc.get(f"/holdings/{hid}/calculations/2023/export/excel")
+    wb = openpyxl.load_workbook(io.BytesIO(r.content))
+    ws = wb["Summary"]
+    rows = list(ws.iter_rows(values_only=True))
+
+    interest_row = next(
+        (row for row in rows if row[0] and "6621 interest" in str(row[0])), None
+    )
+    assert interest_row is not None, "§6621 interest row not found in Excel Summary"
+    assert approx(interest_row[1], expected_interest, "0.01"), \
+        f"Excel interest {interest_row[1]} != calc {expected_interest}"
+
+
+def test_http_export_404_when_no_calc(http_export_setup):
+    """Export must return 404 when no calculation exists for the requested year."""
+    tc, hid, _ = http_export_setup
+    for typ in ("pdf", "line16a", "excel"):
+        r = tc.get(f"/holdings/{hid}/calculations/1999/export/{typ}")
+        assert r.status_code == 404, f"{typ} should 404 for non-existent calc, got {r.status_code}"
