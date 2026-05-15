@@ -9,7 +9,7 @@ from decimal import Decimal
 from datetime import date
 
 from pfic_engine.core.decimal_utils import to_decimal, round_cents
-from pfic_engine.core.tax_constants import get_max_tax_rate, get_filing_deadline
+from pfic_engine.core.tax_constants import get_max_tax_rate
 from pfic_engine.core.date_utils import interest_start_date, interest_end_date
 from pfic_engine.section_1291.daily_allocation import DayClassification
 from pfic_engine.section_1291.interest import (
@@ -30,6 +30,7 @@ def compute_year_tax(year: int, allocated_amount: Decimal) -> Decimal:
 def compute_deferred_tax_with_interest(
     year_buckets: dict,
     current_tax_year: int,
+    interest_end_override: date | None = None,
 ) -> dict:
     """
     For every prior-PFIC year bucket, compute:
@@ -42,7 +43,7 @@ def compute_deferred_tax_with_interest(
 
     Returns full detail dict for audit trail and Form 8621 Part V output.
     """
-    current_deadline = get_filing_deadline(current_tax_year)
+    i_end_global = interest_end_override if interest_end_override is not None else interest_end_date(current_tax_year)
     results = {}
     total_deferred_tax = Decimal("0")
     total_interest = Decimal("0")
@@ -67,7 +68,7 @@ def compute_deferred_tax_with_interest(
         # Prior PFIC year — compute deferred tax + interest
         tax = compute_year_tax(year, amount)
         i_start = interest_start_date(year)
-        i_end = interest_end_date(current_tax_year)
+        i_end = i_end_global
         interest = calculate_interest_for_year_bucket(tax, i_start, i_end)
         detail = build_interest_detail(year, tax, i_start, i_end)
 

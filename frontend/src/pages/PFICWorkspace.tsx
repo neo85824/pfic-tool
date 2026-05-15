@@ -24,6 +24,10 @@ export default function PFICWorkspace() {
     return stored ? parseInt(stored) : new Date().getFullYear() - 1
   })
   const [calcResult, setCalcResult] = useState<CalculationDetail | null>(null)
+  const [interestEndDate, setInterestEndDate] = useState<string>(() => {
+    const y = new Date().getFullYear() - 1
+    return `${y + 1}-04-15`
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [csvStatus, setCsvStatus] = useState('')
@@ -34,6 +38,7 @@ export default function PFICWorkspace() {
 
   const updateTaxYear = (year: number) => {
     setTaxYear(year)
+    setInterestEndDate(`${year + 1}-04-15`)
     if (holdingId) localStorage.setItem(`pfic_taxYear_${holdingId}`, String(year))
   }
 
@@ -91,7 +96,7 @@ export default function PFICWorkspace() {
     setLoading(true)
     setError('')
     try {
-      const res = await calcApi.run(holdingId!, taxYear)
+      const res = await calcApi.run(holdingId!, taxYear, interestEndDate)
       setCalcResult(res.data)
       setStep(4)
     } catch (err: any) {
@@ -657,6 +662,15 @@ export default function PFICWorkspace() {
                 <span className="text-slate-600">Interest</span>
                 <span className="font-medium">§6622 daily compounding</span>
               </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-600">Interest accrual through</span>
+                <input
+                  type="date"
+                  value={interestEndDate}
+                  onChange={(e) => setInterestEndDate(e.target.value)}
+                  className="border border-slate-300 rounded px-2 py-0.5 text-sm font-mono w-40"
+                />
+              </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">Lot matching</span>
                 <span className="font-medium">FIFO (required by IRS)</span>
@@ -701,7 +715,8 @@ export default function PFICWorkspace() {
           const dailyRate = totalDays > 0 ? excess / totalDays : 0
           const firstYear = sortedYears[0] || ''
           const priorYears = sortedYears.filter(yr => merged[yr]?.classification === 'prior_pfic')
-          const interestEnd = priorYears.length > 0 ? merged[priorYears[0]]?.interest_end?.slice(0, 10) : null
+          const interestEnd = (fr.interest_end_date as string | undefined)?.slice(0, 10)
+            ?? (priorYears.length > 0 ? merged[priorYears[0]]?.interest_end?.slice(0, 10) : null)
 
           return (
             <div className="space-y-5">
@@ -872,7 +887,7 @@ export default function PFICWorkspace() {
                     <span className="ml-2 text-xs font-normal text-slate-400">[§6622 daily compound]</span>
                   </h3>
                   <p className="text-xs text-slate-500 mb-3">
-                    Accrues from each year's filing deadline → {interestEnd} ({fr.tax_year} return due date)
+                    Accrues from each year's filing deadline → {interestEnd}
                   </p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">

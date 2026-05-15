@@ -66,6 +66,7 @@ def _engine_version() -> str:
 class CalculateRequest(BaseModel):
     tax_year: int
     marginal_rate_override: Optional[float] = None  # Not used in MVP (engine uses max rate)
+    interest_end_date: Optional[date] = None  # defaults to filing deadline of tax_year
 
 
 class CalculationSummary(BaseModel):
@@ -167,7 +168,9 @@ def run_calculation(
                 current_tax_year=tax_year,
             )
             deferred = compute_deferred_tax_with_interest(
-                alloc["year_buckets"], current_tax_year=tax_year
+                alloc["year_buckets"],
+                current_tax_year=tax_year,
+                interest_end_override=req.interest_end_date,
             )
             try:
                 check_warnings = run_all_checks(
@@ -200,8 +203,12 @@ def run_calculation(
     total_ordinary = non_excess + sum(Decimal(d["ordinary_income"]) for d in all_deferred_results)
     grand_total = total_tax + total_interest
 
+    from pfic_engine.core.date_utils import interest_end_date as _default_end
+    effective_interest_end = req.interest_end_date or _default_end(tax_year)
+
     full_result = {
         "tax_year": tax_year,
+        "interest_end_date": effective_interest_end.isoformat(),
         "current_year_distribution": str(current_year_dist),
         "prior_3yr_average": str(prior_avg),
         "non_excess_ordinary": str(non_excess),

@@ -119,8 +119,11 @@ export const holdingContextApi = {
 // ── Calculations ─────────────────────────────────────────────────────────────
 
 export const calcApi = {
-  run: (holdingId: string, taxYear: number) =>
-    api.post<CalculationDetail>(`/holdings/${holdingId}/calculate`, { tax_year: taxYear }),
+  run: (holdingId: string, taxYear: number, interestEndDate?: string) =>
+    api.post<CalculationDetail>(`/holdings/${holdingId}/calculate`, {
+      tax_year: taxYear,
+      ...(interestEndDate ? { interest_end_date: interestEndDate } : {}),
+    }),
   list: (holdingId: string) =>
     api.get<CalculationSummary[]>(`/holdings/${holdingId}/calculations`),
   get: (holdingId: string, taxYear: number) =>
