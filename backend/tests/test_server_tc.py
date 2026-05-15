@@ -822,3 +822,91 @@ def test_http_export_404_when_no_calc(http_export_setup):
     for typ in ("pdf", "line16a", "excel"):
         r = tc.get(f"/holdings/{hid}/calculations/1999/export/{typ}")
         assert r.status_code == 404, f"{typ} should 404 for non-existent calc, got {r.status_code}"
+
+
+# ── Unicode / CJK export tests ────────────────────────────────────────────────
+# Regression: reportlab's built-in Helvetica font is latin-1 only.
+# PFIC names and client codes containing CJK characters must not crash the export.
+
+def test_unicode_helper_latin_passthrough():
+    from pfic_engine.output._unicode import u, safe_filename
+    assert u("ABC-123") == "ABC-123"
+    assert safe_filename("CASE-001-SMITH") == "CASE-001-SMITH"
+
+
+def test_unicode_helper_cjk_wraps_font_tag():
+    from pfic_engine.output._unicode import u, safe_filename
+    result = u("貝萊德環球")
+    assert "貝萊德環球" in result          # original text preserved
+    assert "<font" in result               # wrapped in font tag for reportlab
+    assert safe_filename("PILAN YIN-貝萊德") == "PILAN_YIN-"  # ASCII-safe
+
+
+def test_pdf_workpaper_cjk_name():
+    """PDF generation must not crash when PFIC name or client code contains CJK."""
+    from pfic_engine.output.pdf_generator import generate_form8621_workpaper
+    r = _tc_main_excel()
+    pdf = generate_form8621_workpaper(r["full_result"], "貝萊德環球基金", "客戶-001")
+    assert pdf[:4] == b"%PDF", "Not a valid PDF"
+    assert len(pdf) > 2000
+
+
+def test_line16a_cjk_name():
+    """Line 16a generation must not crash with CJK names."""
+    from pfic_engine.output.line16a_statement import generate_line16a_statement
+    r = _tc_main_excel()
+    pdf = generate_line16a_statement(r["full_result"], "貝萊德環球基金", "客戶-001")
+    assert pdf[:4] == b"%PDF", "Not a valid PDF"
+    assert len(pdf) > 2000
+
+
+@pytest.fixture(scope="module")
+def http_export_cjk_setup():
+    """Holding with Chinese PFIC name and client code — mirrors the Render production case."""
+    import uuid
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    tc = TestClient(app)
+    unique_code = f"CJK-{uuid.uuid4().hex[:8].upper()}-貝萊德"
+    r = tc.post("/clients/", json={"client_code": unique_code})
+    assert r.status_code in (200, 201), r.text
+    cid = r.json()["id"]
+
+    r = tc.post(f"/clients/{cid}/holdings/", json={"pfic_name": "貝萊德環球基金", "currency": "USD", "method": "1291"})
+    assert r.status_code in (200, 201), r.text
+    hid = r.json()["id"]
+
+    for txn in [
+        {"txn_date": "2020-01-15", "txn_type": "purchase", "units": 100, "total_value_usd": 10000},
+        {"txn_date": "2021-06-30", "txn_type": "distribution", "total_value_usd": 500},
+        {"txn_date": "2022-06-30", "txn_type": "distribution", "total_value_usd": 800},
+        {"txn_date": "2023-06-30", "txn_type": "distribution", "total_value_usd": 2500},
+    ]:
+        tc.post(f"/holdings/{hid}/transactions/", json=txn)
+
+    r = tc.post(f"/holdings/{hid}/calculate", json={"tax_year": 2023})
+    assert r.status_code == 200, r.text
+    return tc, hid
+
+
+def test_http_export_pdf_cjk(http_export_cjk_setup):
+    """PDF export must succeed for a holding with a CJK PFIC name."""
+    tc, hid = http_export_cjk_setup
+    r = tc.get(f"/holdings/{hid}/calculations/2023/export/pdf")
+    assert r.status_code == 200, f"PDF export failed with CJK name: {r.text}"
+    assert r.content[:4] == b"%PDF"
+
+
+def test_http_export_line16a_cjk(http_export_cjk_setup):
+    tc, hid = http_export_cjk_setup
+    r = tc.get(f"/holdings/{hid}/calculations/2023/export/line16a")
+    assert r.status_code == 200, f"Line16a export failed with CJK name: {r.text}"
+    assert r.content[:4] == b"%PDF"
+
+
+def test_http_export_excel_cjk(http_export_cjk_setup):
+    tc, hid = http_export_cjk_setup
+    r = tc.get(f"/holdings/{hid}/calculations/2023/export/excel")
+    assert r.status_code == 200, f"Excel export failed with CJK name: {r.text}"
+    assert "spreadsheetml" in r.headers["content-type"]
