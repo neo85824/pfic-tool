@@ -1,6 +1,7 @@
 """FastAPI application entry point."""
 import sys
 import os
+from contextlib import asynccontextmanager
 
 # Ensure backend/ is on the path when running from any directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,19 +17,33 @@ from api.routes.calculations import router as calculations_router
 from api.routes.exports import router as exports_router
 from api.db.seed_static import seed
 
+_DEFAULT_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://pfic-tool.vercel.app",
+]
+_extra = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+ALLOWED_ORIGINS = _DEFAULT_ORIGINS + _extra
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from api.deps import get_engine_once
+    get_engine_once()
+    seed()
+    yield
+
+
 app = FastAPI(
     title="PFIC Tool API",
     description="§1291 Excess Distribution calculator — MVP",
-    version="0.1.0",
+    version=os.getenv("APP_VERSION", "0.1.0"),
+    lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://pfic-tool.vercel.app",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,14 +57,6 @@ app.include_router(calculations_router)
 app.include_router(exports_router)
 
 
-@app.on_event("startup")
-def on_startup():
-    """Create tables and seed static data on first run."""
-    from api.deps import get_engine_once
-    get_engine_once()
-    seed()
-
-
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "0.1.0"}
+    return {"status": "ok", "version": os.getenv("APP_VERSION", "0.1.0")}

@@ -7,7 +7,7 @@ DATABASE_URL env var controls the connection:
 """
 import os
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -92,7 +92,7 @@ class User(Base):
     hashed_password = Column(String(200), nullable=False)
     role = Column(String(50), nullable=False, default="preparer")
     is_active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     clients = relationship("Client", back_populates="user")
 
@@ -106,7 +106,7 @@ class Client(Base):
     client_code = Column(String(50), nullable=False)
     tax_year_start = Column(Integer)
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="clients")
     holdings = relationship("PFICHolding", back_populates="client", cascade="all, delete-orphan")
@@ -125,7 +125,7 @@ class PFICHolding(Base):
     currency = Column(String(3), nullable=False, default="USD")
     method = Column(String(20), nullable=False, default="1291")  # MVP: only '1291'
     first_pfic_year = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     client = relationship("Client", back_populates="holdings")
     transactions = relationship("Transaction", back_populates="holding",
@@ -144,7 +144,7 @@ class Transaction(Base):
     units = Column(Numeric(20, 8))
     total_value_usd = Column(Numeric(20, 6), nullable=False)
     notes = Column(Text)
-    imported_at = Column(DateTime, default=datetime.utcnow)
+    imported_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     holding = relationship("PFICHolding", back_populates="transactions")
 
@@ -169,7 +169,7 @@ class Calculation(Base):
     grand_total = Column(Numeric(20, 2))
 
     full_result = Column(JSONType, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     holding = relationship("PFICHolding", back_populates="calculations")
 
@@ -232,7 +232,7 @@ class FXRateCache(Base):
     rate_date = Column(Date, primary_key=True)
     source = Column(String(20), primary_key=True)
     rate = Column(Numeric(16, 8), nullable=False)
-    fetched_at = Column(DateTime, default=datetime.utcnow)
+    fetched_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 # ── Engine factory ───────────────────────────────────────────────────────────

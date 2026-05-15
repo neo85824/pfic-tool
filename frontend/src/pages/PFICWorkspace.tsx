@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { txnsApi, calcApi, holdingContextApi, exportUrl, type Holding, type Transaction, type CalculationDetail, type HoldingContext } from '../api'
+import api, { txnsApi, calcApi, holdingContextApi, exportUrl, type Holding, type Transaction, type CalculationDetail, type HoldingContext } from '../api'
 
 type Step = 1 | 2 | 3 | 4 | 5
 
@@ -141,25 +141,27 @@ export default function PFICWorkspace() {
   }
 
   const downloadExport = async (type: 'pdf' | 'line16a' | 'excel') => {
-    const token = localStorage.getItem('token')
     const exportTaxYear = (calcResult as any)?.tax_year ?? taxYear
     const url = exportUrl(holdingId!, exportTaxYear, type)
     setExportError('')
     try {
-      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-      if (!r.ok) {
-        let msg = `Export failed (${r.status})`
-        try { const j = await r.json(); msg = j.detail || msg } catch {}
-        setExportError(msg)
-        return
-      }
-      const blob = await r.blob()
+      const r = await api.get(url, { responseType: 'blob' })
       const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `Form8621_${type}_${taxYear}.${type === 'excel' ? 'xlsx' : 'pdf'}`
+      a.href = URL.createObjectURL(r.data)
+      a.download = `Form8621_${type}_${exportTaxYear}.${type === 'excel' ? 'xlsx' : 'pdf'}`
       a.click()
     } catch (err: any) {
-      setExportError('Export failed: ' + err.message)
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text()
+          const j = JSON.parse(text)
+          setExportError(j.detail || `Export failed (${err.response.status})`)
+        } catch {
+          setExportError(`Export failed (${err.response?.status ?? 'unknown'})`)
+        }
+      } else {
+        setExportError('Export failed: ' + (err.response?.data?.detail || err.message))
+      }
     }
   }
 
@@ -322,12 +324,14 @@ export default function PFICWorkspace() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {[
-                        ['1987 – 1992', '28%'],
+                        ['1987', '38.6%'],
+                        ['1988 – 1990', '28.0%'],
+                        ['1991 – 1992', '31.0%'],
                         ['1993 – 2000', '39.6%'],
-                        ['2001 – 2002', '39.1%'],
-                        ['2003 – 2012', '35%'],
+                        ['2001 – 2002', '38.6%'],
+                        ['2003 – 2012', '35.0%'],
                         ['2013 – 2017', '39.6%'],
-                        ['2018 – present', '37%'],
+                        ['2018 – present', '37.0%'],
                       ].map(([yrs, rate]) => (
                         <tr key={yrs}>
                           <td className="px-3 py-2 text-slate-700">{yrs}</td>

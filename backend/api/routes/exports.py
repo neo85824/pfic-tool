@@ -12,7 +12,7 @@ from pfic_engine.output.excel_workpaper import generate_workpapers
 router = APIRouter(prefix="/holdings/{holding_id}/calculations/{tax_year}", tags=["exports"])
 
 
-def _get_calc(holding_id: str, tax_year: int, user: User, db: Session) -> Calculation:
+def _get_calc(holding_id: str, tax_year: int, user: User, db: Session) -> tuple[Calculation, PFICHolding]:
     h = (
         db.query(PFICHolding)
         .join(Client)

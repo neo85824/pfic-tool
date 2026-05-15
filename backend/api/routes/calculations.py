@@ -3,6 +3,7 @@ Calculation trigger and retrieval.
 POST /holdings/{id}/calculate  → runs §1291 engine, stores result
 GET  /holdings/{id}/calculations/{tax_year} → retrieve stored result
 """
+import os
 import subprocess
 from datetime import date
 from decimal import Decimal
@@ -23,6 +24,7 @@ from pfic_engine.section_1291.daily_allocation import allocate_excess_distributi
 from pfic_engine.section_1291.deferred_tax import compute_deferred_tax_with_interest
 from pfic_engine.lot.lot_tracker import LotTracker
 from pfic_engine.verification.cross_check import run_all_checks
+from pfic_engine.core.date_utils import interest_end_date as _ied_default
 
 router = APIRouter(prefix="/holdings/{holding_id}", tags=["calculations"])
 
@@ -55,6 +57,9 @@ def _get_holding(holding_id: str, user: User, db: Session) -> PFICHolding:
 
 
 def _engine_version() -> str:
+    v = os.getenv("APP_VERSION", "")
+    if v:
+        return v
     try:
         return subprocess.check_output(
             ["git", "describe", "--tags", "--always"], stderr=subprocess.DEVNULL
@@ -203,8 +208,7 @@ def run_calculation(
     total_ordinary = non_excess + sum(Decimal(d["ordinary_income"]) for d in all_deferred_results)
     grand_total = total_tax + total_interest
 
-    from pfic_engine.core.date_utils import interest_end_date as _default_end
-    effective_interest_end = req.interest_end_date or _default_end(tax_year)
+    effective_interest_end = req.interest_end_date or _ied_default(tax_year)
 
     full_result = {
         "tax_year": tax_year,

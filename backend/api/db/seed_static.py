@@ -149,8 +149,9 @@ def verify(db_url: str = None) -> list[str]:
 
         # Count checks
         total_rates = session.query(IRS6621Rate).count()
-        if total_rates != 157:
-            failures.append(f"IRS6621Rate count: expected 157, got {total_rates}")
+        expected = len(IRS_6621_RATES)
+        if total_rates != expected:
+            failures.append(f"IRS6621Rate count: expected {expected}, got {total_rates}")
 
     return failures
 
