@@ -25,6 +25,8 @@ export default function PFICWorkspace() {
   })
   const [calcResult, setCalcResult] = useState<CalculationDetail | null>(null)
   const [interestEndDate, setInterestEndDate] = useState<string>(() => {
+    const stored = holdingId ? localStorage.getItem(`pfic_interestEnd_${holdingId}`) : null
+    if (stored) return stored
     const y = new Date().getFullYear() - 1
     return `${y + 1}-04-15`
   })
@@ -38,8 +40,12 @@ export default function PFICWorkspace() {
 
   const updateTaxYear = (year: number) => {
     setTaxYear(year)
-    setInterestEndDate(`${year + 1}-04-15`)
-    if (holdingId) localStorage.setItem(`pfic_taxYear_${holdingId}`, String(year))
+    const defaultEnd = `${year + 1}-04-15`
+    setInterestEndDate(defaultEnd)
+    if (holdingId) {
+      localStorage.setItem(`pfic_taxYear_${holdingId}`, String(year))
+      localStorage.setItem(`pfic_interestEnd_${holdingId}`, defaultEnd)
+    }
   }
 
   // Manual txn form
@@ -667,7 +673,10 @@ export default function PFICWorkspace() {
                 <input
                   type="date"
                   value={interestEndDate}
-                  onChange={(e) => setInterestEndDate(e.target.value)}
+                  onChange={(e) => {
+                    setInterestEndDate(e.target.value)
+                    if (holdingId) localStorage.setItem(`pfic_interestEnd_${holdingId}`, e.target.value)
+                  }}
                   className="border border-slate-300 rounded px-2 py-0.5 text-sm font-mono w-40"
                 />
               </div>
