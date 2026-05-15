@@ -142,10 +142,10 @@ export default function PFICWorkspace() {
 
   const downloadExport = async (type: 'pdf' | 'line16a' | 'excel') => {
     const exportTaxYear = (calcResult as any)?.tax_year ?? taxYear
-    const url = exportUrl(holdingId!, exportTaxYear, type)
+    const path = `/holdings/${holdingId!}/calculations/${exportTaxYear}/export/${type}`
     setExportError('')
     try {
-      const r = await api.get(url, { responseType: 'blob' })
+      const r = await api.get(path, { responseType: 'blob' })
       const a = document.createElement('a')
       a.href = URL.createObjectURL(r.data)
       a.download = `Form8621_${type}_${exportTaxYear}.${type === 'excel' ? 'xlsx' : 'pdf'}`
