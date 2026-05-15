@@ -132,5 +132,7 @@ export const calcApi = {
 
 // ── Exports ──────────────────────────────────────────────────────────────────
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
+
 export const exportUrl = (holdingId: string, taxYear: number, type: 'pdf' | 'line16a' | 'excel') =>
-  `/api/holdings/${holdingId}/calculations/${taxYear}/export/${type}`
+  `${API_BASE}/holdings/${holdingId}/calculations/${taxYear}/export/${type}`
