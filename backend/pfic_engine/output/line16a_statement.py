@@ -13,6 +13,8 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable,
 )
 
+from pfic_engine.output._unicode import u
+
 DARK_BLUE  = colors.HexColor("#1A365D")
 LIGHT_BLUE = colors.HexColor("#EEF4FB")
 ORANGE     = colors.HexColor("#FFF3CD")
@@ -92,7 +94,7 @@ def generate_line16a_statement(full_result: dict, holding_name: str, client_code
     story.append(Paragraph("Daily Ratable Allocation of Excess Distribution", bold))
     story.append(Paragraph("IRC §1291(a)(1)(A) — Required Attachment per §6501(c)(8)", irc))
     story.append(HRFlowable(width="100%", thickness=1.5, color=DARK_BLUE, spaceAfter=6))
-    story.append(Paragraph(f"Tax Year: {tax_year}  |  PFIC: {holding_name}  |  Client: {client_code}", normal))
+    story.append(Paragraph(f"Tax Year: {tax_year}  |  PFIC: {u(holding_name)}  |  Client: {u(client_code)}", normal))
     story.append(Paragraph(f"Total Excess Distribution: {_fmt(excess)}", bold))
     story.append(Spacer(1, 8))
 

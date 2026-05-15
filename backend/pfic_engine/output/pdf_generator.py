@@ -20,6 +20,8 @@ from reportlab.platypus import (
 )
 from reportlab.lib.enums import TA_RIGHT
 
+from pfic_engine.output._unicode import u
+
 MARGIN = 0.75 * inch
 DARK_BLUE  = colors.HexColor("#1A365D")
 MID_BLUE   = colors.HexColor("#2D6A9F")
@@ -115,7 +117,7 @@ def generate_form8621_workpaper(full_result: dict, holding_name: str, client_cod
 
     # ── Header ────────────────────────────────────────────────────────────────
     story.append(Paragraph("PFIC Form 8621 — Calculation Workpaper", title))
-    story.append(Paragraph(f"Tax Year: {tax_year}  |  PFIC: {holding_name}  |  Client: {client_code}", normal))
+    story.append(Paragraph(f"Tax Year: {tax_year}  |  PFIC: {u(holding_name)}  |  Client: {u(client_code)}", normal))
     story.append(Paragraph("Method: §1291 Excess Distribution  |  Currency: USD", normal))
     story.append(HRFlowable(width="100%", thickness=2, color=DARK_BLUE, spaceAfter=8))
 

@@ -13,6 +13,7 @@ from api.deps import get_db, get_current_user
 from pfic_engine.output.pdf_generator import generate_form8621_workpaper
 from pfic_engine.output.line16a_statement import generate_line16a_statement
 from pfic_engine.output.excel_workpaper import generate_workpapers
+from pfic_engine.output._unicode import safe_filename
 
 router = APIRouter(prefix="/holdings/{holding_id}/calculations/{tax_year}", tags=["exports"])
 
@@ -47,7 +48,7 @@ def export_pdf(
         pdf_bytes = generate_form8621_workpaper(
             calc.full_result, holding.pfic_name, client.client_code
         )
-        filename = f"Form8621_Workpaper_{client.client_code}_{tax_year}.pdf"
+        filename = f"Form8621_Workpaper_{safe_filename(client.client_code)}_{tax_year}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -75,7 +76,7 @@ def export_line16a(
         pdf_bytes = generate_line16a_statement(
             calc.full_result, holding.pfic_name, client.client_code
         )
-        filename = f"Form8621_Line16a_{client.client_code}_{tax_year}.pdf"
+        filename = f"Form8621_Line16a_{safe_filename(client.client_code)}_{tax_year}.pdf"
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -103,7 +104,7 @@ def export_excel(
         xlsx_bytes = generate_workpapers(
             calc.full_result, holding.pfic_name, client.client_code
         )
-        filename = f"Form8621_Workpapers_{client.client_code}_{tax_year}.xlsx"
+        filename = f"Form8621_Workpapers_{safe_filename(client.client_code)}_{tax_year}.xlsx"
         return Response(
             content=xlsx_bytes,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
