@@ -1,7 +1,12 @@
 """Export endpoints — PDF workpaper, Line 16a attachment, Excel workpapers."""
+import logging
+import traceback
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from api.db.models import Calculation, PFICHolding, Client, User
 from api.deps import get_db, get_current_user
@@ -36,9 +41,13 @@ def export_pdf(
 ):
     calc, holding = _get_calc(holding_id, tax_year, user, db)
     client = db.get(Client, holding.client_id)
-    pdf_bytes = generate_form8621_workpaper(
-        calc.full_result, holding.pfic_name, client.client_code
-    )
+    try:
+        pdf_bytes = generate_form8621_workpaper(
+            calc.full_result, holding.pfic_name, client.client_code
+        )
+    except Exception as e:
+        logger.error("PDF export failed: %s\n%s", e, traceback.format_exc())
+        raise HTTPException(500, f"PDF generation failed: {e}")
     filename = f"Form8621_Workpaper_{client.client_code}_{tax_year}.pdf"
     return Response(
         content=pdf_bytes,
@@ -56,9 +65,13 @@ def export_line16a(
 ):
     calc, holding = _get_calc(holding_id, tax_year, user, db)
     client = db.get(Client, holding.client_id)
-    pdf_bytes = generate_line16a_statement(
-        calc.full_result, holding.pfic_name, client.client_code
-    )
+    try:
+        pdf_bytes = generate_line16a_statement(
+            calc.full_result, holding.pfic_name, client.client_code
+        )
+    except Exception as e:
+        logger.error("Line16a export failed: %s\n%s", e, traceback.format_exc())
+        raise HTTPException(500, f"Line 16a generation failed: {e}")
     filename = f"Form8621_Line16a_{client.client_code}_{tax_year}.pdf"
     return Response(
         content=pdf_bytes,
@@ -76,9 +89,13 @@ def export_excel(
 ):
     calc, holding = _get_calc(holding_id, tax_year, user, db)
     client = db.get(Client, holding.client_id)
-    xlsx_bytes = generate_workpapers(
-        calc.full_result, holding.pfic_name, client.client_code
-    )
+    try:
+        xlsx_bytes = generate_workpapers(
+            calc.full_result, holding.pfic_name, client.client_code
+        )
+    except Exception as e:
+        logger.error("Excel export failed: %s\n%s", e, traceback.format_exc())
+        raise HTTPException(500, f"Excel generation failed: {e}")
     filename = f"Form8621_Workpapers_{client.client_code}_{tax_year}.xlsx"
     return Response(
         content=xlsx_bytes,
