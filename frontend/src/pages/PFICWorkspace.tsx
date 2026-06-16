@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import api, { txnsApi, calcApi, holdingContextApi, exportUrl, type Holding, type Transaction, type CalculationDetail, type HoldingContext } from '../api'
+import api, { txnsApi, calcApi, holdingContextApi, type Holding, type Transaction, type CalculationDetail, type HoldingContext } from '../api'
 
 type Step = 1 | 2 | 3 | 4 | 5
 
