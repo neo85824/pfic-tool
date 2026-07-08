@@ -58,7 +58,7 @@ def test_tables_created(engine):
 
 def test_seed_rate_count(seeded_engine):
     with Session(seeded_engine) as s:
-        assert s.query(IRS6621Rate).count() == 158
+        assert s.query(IRS6621Rate).count() == 159
 
 
 def test_seed_max_tax_rates(seeded_engine):
@@ -114,7 +114,7 @@ def test_seed_idempotent(seeded_engine):
         for entry in IRS_6621_RATES:
             _upsert_rate(s, entry)
         s.commit()
-        assert s.query(IRS6621Rate).count() == 158
+        assert s.query(IRS6621Rate).count() == 159
 
 
 # ── CRUD: User / Client / Holding / Transaction ──────────────────────────────

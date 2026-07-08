@@ -12,8 +12,8 @@ from pfic_engine.core.tax_constants import (
 )
 
 
-def test_rate_table_has_158_entries():
-    assert len(IRS_6621_RATES) == 158
+def test_rate_table_has_159_entries():
+    assert len(IRS_6621_RATES) == 159
 
 
 def test_rate_table_starts_1987_q1():
@@ -21,10 +21,10 @@ def test_rate_table_starts_1987_q1():
     assert IRS_6621_RATES[0].quarter == 1
 
 
-def test_rate_table_ends_2026_q2():
+def test_rate_table_ends_2026_q3():
     last = IRS_6621_RATES[-1]
     assert last.year == 2026
-    assert last.quarter == 2
+    assert last.quarter == 3
 
 
 def test_rate_lookup_known_values():
@@ -41,6 +41,14 @@ def test_rate_lookup_known_values():
 def test_rate_lookup_missing_raises():
     with pytest.raises(ValueError, match="No §6621 rate"):
         get_6621_rate(2030, 1)
+
+
+def test_rate_2026_q3_present():
+    # Regression: calculations with dates on/after 2026-07-01 (Q3) previously
+    # raised "No §6621 rate found for 2026 Q3" because the table stopped at Q2.
+    # Rate per Rev. Rul. 2026-10 (underpayment, non-corporate).
+    assert get_6621_rate(2026, 3) == Decimal("0.07")
+    assert quarter_for_date(date(2026, 7, 1)) == 3
 
 
 def test_max_tax_rates():

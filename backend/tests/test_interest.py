@@ -131,3 +131,15 @@ def test_tc_main_interest_rate_periods_count():
     assert periods[2].annual_rate == D("0.06")  # 2022 Q4
     assert periods[3].annual_rate == D("0.07")  # 2023 Q1
     assert periods[4].annual_rate == D("0.07")  # 2023 Q2
+
+
+def test_interest_end_date_2026_q3_no_longer_fails():
+    # Regression: interest_end_date of 2026-07-01 (or later, into Q3) used to
+    # raise ValueError("No §6621 rate found for 2026 Q3") because the rate
+    # table stopped at Q2. Now covered by Rev. Rul. 2026-10.
+    interest = calculate_interest_for_year_bucket(
+        D("1000"),
+        date(2026, 4, 15),
+        date(2026, 7, 1),
+    )
+    assert interest > D("0")

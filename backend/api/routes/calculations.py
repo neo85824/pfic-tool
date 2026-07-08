@@ -155,52 +155,55 @@ def run_calculation(
     all_deferred_results = []
     warnings: list[str] = []
 
-    # Process each lot that was held during this distribution / sale
-    if excess > Decimal("0"):
-        eligible_lots = [l for l in tracker.lots if l.acquisition_date.year <= tax_year]
-        total_units = sum(l.units for l in eligible_lots)
+    try:
+        # Process each lot that was held during this distribution / sale
+        if excess > Decimal("0"):
+            eligible_lots = [l for l in tracker.lots if l.acquisition_date.year <= tax_year]
+            total_units = sum(l.units for l in eligible_lots)
 
-        lot_excess_amounts = compute_lot_shares(
-            excess, [l.units for l in eligible_lots]
-        )
+            lot_excess_amounts = compute_lot_shares(
+                excess, [l.units for l in eligible_lots]
+            )
 
-        for lot, lot_excess in zip(eligible_lots, lot_excess_amounts):
-            disposition_date = date(tax_year, 12, 31)
-            alloc = allocate_excess_distribution(
-                excess_amount=lot_excess,
-                acquisition_date=lot.acquisition_date,
-                disposition_date=disposition_date,
-                current_tax_year=tax_year,
-            )
-            deferred = compute_deferred_tax_with_interest(
-                alloc["year_buckets"],
-                current_tax_year=tax_year,
-                interest_end_override=req.interest_end_date,
-            )
-            try:
-                check_warnings = run_all_checks(
-                    alloc["year_buckets"], lot_excess, deferred
+            for lot, lot_excess in zip(eligible_lots, lot_excess_amounts):
+                disposition_date = date(tax_year, 12, 31)
+                alloc = allocate_excess_distribution(
+                    excess_amount=lot_excess,
+                    acquisition_date=lot.acquisition_date,
+                    disposition_date=disposition_date,
+                    current_tax_year=tax_year,
                 )
-                warnings.extend(check_warnings)
-            except Exception as e:
-                warnings.append(f"Cross-check failed: {e}")
+                deferred = compute_deferred_tax_with_interest(
+                    alloc["year_buckets"],
+                    current_tax_year=tax_year,
+                    interest_end_override=req.interest_end_date,
+                )
+                try:
+                    check_warnings = run_all_checks(
+                        alloc["year_buckets"], lot_excess, deferred
+                    )
+                    warnings.extend(check_warnings)
+                except Exception as e:
+                    warnings.append(f"Cross-check failed: {e}")
 
-            for yr, bucket in alloc["year_buckets"].items():
-                if yr in all_year_buckets:
-                    all_year_buckets[yr]["days"] += bucket["days"]
-                    all_year_buckets[yr]["amount"] += bucket["amount"]
-                else:
-                    all_year_buckets[yr] = dict(bucket)
-            all_deferred_results.append({
-                "acquisition_date": str(lot.acquisition_date),
-                "units": str(lot.units),
-                "lot_excess": str(lot_excess),
-                "year_results": deferred["year_results"],
-                "ordinary_income": deferred["ordinary_income"],
-                "total_deferred_tax": deferred["total_deferred_tax"],
-                "total_interest": deferred["total_interest"],
-                "grand_total": deferred["grand_total"],
-            })
+                for yr, bucket in alloc["year_buckets"].items():
+                    if yr in all_year_buckets:
+                        all_year_buckets[yr]["days"] += bucket["days"]
+                        all_year_buckets[yr]["amount"] += bucket["amount"]
+                    else:
+                        all_year_buckets[yr] = dict(bucket)
+                all_deferred_results.append({
+                    "acquisition_date": str(lot.acquisition_date),
+                    "units": str(lot.units),
+                    "lot_excess": str(lot_excess),
+                    "year_results": deferred["year_results"],
+                    "ordinary_income": deferred["ordinary_income"],
+                    "total_deferred_tax": deferred["total_deferred_tax"],
+                    "total_interest": deferred["total_interest"],
+                    "grand_total": deferred["grand_total"],
+                })
+    except ValueError as e:
+        raise HTTPException(400, f"Calculation failed: {e}")
 
     # Aggregate totals
     total_tax = sum(Decimal(d["total_deferred_tax"]) for d in all_deferred_results)
