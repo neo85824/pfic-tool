@@ -20,9 +20,22 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 from sqlalchemy.types import TypeDecorator, TEXT
 import json
 
+def normalize_db_url(url: str) -> str:
+    """Render provides postgres:// but SQLAlchemy 2.x requires postgresql://.
+
+    The driver is named explicitly because SQLAlchemy 2.1 changed the default
+    DBAPI for a bare postgresql:// URL from psycopg2 to psycopg (v3), which we
+    do not install — an unpinned build picked up 2.1 and crash-looped on startup
+    with ModuleNotFoundError: No module named 'psycopg'.
+    """
+    url = url.replace("postgres://", "postgresql://", 1)
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    return url
+
+
 _db_url = os.getenv("DATABASE_URL", "sqlite:///./pfic_tool_dev.db")
-# Render provides postgres:// but SQLAlchemy 2.x requires postgresql://
-DATABASE_URL = _db_url.replace("postgres://", "postgresql://", 1)
+DATABASE_URL = normalize_db_url(_db_url)
 
 # ── JSONB compatibility shim (SQLite stores JSON as TEXT) ────────────────────
 

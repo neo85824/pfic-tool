@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from api.db.models import (
     User, Client, PFICHolding, Transaction, Calculation,
     IRS6621Rate, MaxTaxRate, FilingDeadline,
-    get_engine, create_tables,
+    get_engine, create_tables, normalize_db_url,
 )
 from api.db.seed_static import seed, verify
 
@@ -208,3 +208,27 @@ def test_unique_constraint_client_code(engine):
         s.add(Client(user_id=user.id, client_code="DUP-001"))
         with pytest.raises(sqlalchemy.exc.IntegrityError):
             s.flush()
+
+
+# ── Postgres driver selection ────────────────────────────────────────────────
+
+def test_postgres_url_names_psycopg2_explicitly():
+    # Regression: requirements.txt was unpinned, so a fresh build installed
+    # SQLAlchemy 2.1, which defaults a bare postgresql:// URL to psycopg (v3)
+    # instead of psycopg2. psycopg3 is not installed, so the backend crash-looped
+    # on Render with "ModuleNotFoundError: No module named 'psycopg'". The URL
+    # must name the driver rather than relying on SQLAlchemy's default.
+    assert normalize_db_url("postgresql://u:p@h:5432/db") == "postgresql+psycopg2://u:p@h:5432/db"
+    # Render hands out the legacy postgres:// scheme
+    assert normalize_db_url("postgres://u:p@h:5432/db") == "postgresql+psycopg2://u:p@h:5432/db"
+    # already explicit — left alone
+    assert normalize_db_url("postgresql+psycopg2://u:p@h/db") == "postgresql+psycopg2://u:p@h/db"
+    # sqlite untouched
+    assert normalize_db_url("sqlite:///./pfic_tool_dev.db") == "sqlite:///./pfic_tool_dev.db"
+
+
+def test_postgres_engine_resolves_to_psycopg2_dialect():
+    # The URL above must actually import psycopg2 — this is the import that
+    # blew up in production. create_engine() imports the DBAPI without connecting.
+    engine = get_engine(normalize_db_url("postgres://u:p@h:5432/db"))
+    assert engine.dialect.driver == "psycopg2"

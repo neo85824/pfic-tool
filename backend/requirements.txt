@@ -1,11 +1,15 @@
-fastapi>=0.110
-uvicorn[standard]
-sqlalchemy>=2.0
-alembic
-psycopg2-binary
-python-jose[cryptography]
-passlib[bcrypt]
-python-multipart
-reportlab>=4.0
-openpyxl>=3.1
-pytest
+# Pinned exactly to the versions the test suite is green against (184 passing).
+# Unpinned ranges let Render build SQLAlchemy 2.1, whose Postgres default driver
+# is psycopg (v3) rather than psycopg2 — the backend crash-looped on startup.
+# Bump these deliberately: change the pin, run pytest, then deploy.
+fastapi==0.124.4
+uvicorn[standard]==0.33.0
+sqlalchemy==2.0.49
+alembic==1.18.4
+psycopg2-binary==2.9.12
+python-jose[cryptography]==3.5.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.20
+reportlab==4.5.0
+openpyxl==3.1.5
+pytest==9.0.3
