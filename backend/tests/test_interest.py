@@ -143,3 +143,15 @@ def test_interest_end_date_2026_q3_no_longer_fails():
         date(2026, 7, 1),
     )
     assert interest > D("0")
+
+
+def test_interest_end_date_2026_q4_no_longer_fails():
+    # Regression: interest_end_date of 2026-10-14 (Q4) used to raise
+    # ValueError("No §6621 rate found for 2026 Q4") because the rate table
+    # stopped at Q3. Now covered by Rev. Rul. 2026-15, IRB 2026-36.
+    interest = calculate_interest_for_year_bucket(
+        D("1000"),
+        date(2026, 4, 15),
+        date(2026, 10, 14),
+    )
+    assert interest > D("0")

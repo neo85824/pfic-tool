@@ -17,7 +17,7 @@ class RateEntry(NamedTuple):
     effective_to: date
 
 
-# §6621(a)(2) underpayment rates — non-corporate taxpayers — 1987 Q1 through 2026 Q1
+# §6621(a)(2) underpayment rates — non-corporate taxpayers — 1987 Q1 through 2026 Q4
 # Format: (year, quarter, rate_pct)
 # Source: IRS IRB Rev. Ruls. Verify each entry before production.
 _RAW_6621 = [
@@ -181,6 +181,7 @@ _RAW_6621 = [
     (2026,  1, "0.07"),
     (2026,  2, "0.06"),  # IRS IRB 2026-08
     (2026,  3, "0.07"),  # Rev. Rul. 2026-10
+    (2026,  4, "0.07"),  # Rev. Rul. 2026-15, IRB 2026-36
 ]
 
 # Quarter-to-date-range mapping
@@ -298,6 +299,7 @@ _FILING_DEADLINES: dict[int, date] = {
     2023: date(2024, 4, 15),
     2024: date(2025, 4, 15),
     2025: date(2026, 4, 15),
+    2026: date(2027, 4, 15),   # Emancipation Day (DC) falls on Fri 4/16/2027; no shift
 }
 
 

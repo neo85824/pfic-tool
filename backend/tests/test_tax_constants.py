@@ -12,8 +12,8 @@ from pfic_engine.core.tax_constants import (
 )
 
 
-def test_rate_table_has_159_entries():
-    assert len(IRS_6621_RATES) == 159
+def test_rate_table_has_160_entries():
+    assert len(IRS_6621_RATES) == 160
 
 
 def test_rate_table_starts_1987_q1():
@@ -21,10 +21,10 @@ def test_rate_table_starts_1987_q1():
     assert IRS_6621_RATES[0].quarter == 1
 
 
-def test_rate_table_ends_2026_q3():
+def test_rate_table_ends_2026_q4():
     last = IRS_6621_RATES[-1]
     assert last.year == 2026
-    assert last.quarter == 3
+    assert last.quarter == 4
 
 
 def test_rate_lookup_known_values():
@@ -49,6 +49,14 @@ def test_rate_2026_q3_present():
     # Rate per Rev. Rul. 2026-10 (underpayment, non-corporate).
     assert get_6621_rate(2026, 3) == Decimal("0.07")
     assert quarter_for_date(date(2026, 7, 1)) == 3
+
+
+def test_rate_2026_q4_present():
+    # Regression: calculations with dates on/after 2026-10-01 (Q4) previously
+    # raised "No §6621 rate found for 2026 Q4" because the table stopped at Q3.
+    # Rate per Rev. Rul. 2026-15, IRB 2026-36 (underpayment, non-corporate).
+    assert get_6621_rate(2026, 4) == Decimal("0.07")
+    assert quarter_for_date(date(2026, 10, 14)) == 4
 
 
 def test_max_tax_rates():
@@ -91,3 +99,22 @@ def test_quarter_for_date():
     assert quarter_for_date(date(2022, 9, 30)) == 3
     assert quarter_for_date(date(2022, 10, 1)) == 4
     assert quarter_for_date(date(2022, 12, 31)) == 4
+
+
+def test_rate_table_covers_current_quarter():
+    # Staleness guard: this test goes red the moment a new calendar quarter
+    # starts without a published §6621 rate in _RAW_6621, instead of a user
+    # hitting "Calculation failed" in the UI (this has happened three times:
+    # 2026 Q2, 2026 Q3, 2026 Q4). Next expected trip: 2027-01-01.
+    today = date.today()
+    year = today.year
+    quarter = quarter_for_date(today)
+    try:
+        get_6621_rate(year, quarter)
+    except ValueError:
+        pytest.fail(
+            f"No §6621 rate configured for the current quarter ({year} Q{quarter}). "
+            f"Look up the Revenue Ruling for this quarter's underpayment rate "
+            f"(published quarterly in the Internal Revenue Bulletin) and add a "
+            f"({year}, {quarter}, \"<rate>\") entry to _RAW_6621 in tax_constants.py."
+        )

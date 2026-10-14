@@ -33,6 +33,12 @@ def test_covid_2020_deadline():
     assert get_filing_deadline(2020) == date(2021, 5, 17)
 
 
+def test_tc01_2026_deadline_no_shift():
+    # April 15 2027 is a Thursday; DC Emancipation Day falls Fri 4/16/2027,
+    # so there is no weekend/holiday shift (verified via web search).
+    assert get_filing_deadline(2026) == date(2027, 4, 15)
+
+
 # ── §6621 rate spot-checks ───────────────────────────────────────────────────
 
 def test_6621_rates_2022():
@@ -49,9 +55,11 @@ def test_6621_rates_2023():
     assert get_6621_rate(2023, 4) == D("0.08")
 
 
-def test_6621_rates_2026_includes_q2():
+def test_6621_rates_2026_all_quarters():
     assert get_6621_rate(2026, 1) == D("0.07")
     assert get_6621_rate(2026, 2) == D("0.06")
+    assert get_6621_rate(2026, 3) == D("0.07")
+    assert get_6621_rate(2026, 4) == D("0.07")
 
 
 def test_6621_rates_2019():
